@@ -1,16 +1,34 @@
 -module(picross).
 -compile(export_all).
 
+% picross:emergeMap(lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10))).
+
+emergeMap([Map|Maps]) -> emergeMap(Map, Maps).
+
+emergeMap(Reference, []) -> Reference;
+emergeMap(Reference, [Map|Maps]) -> emergeMap(updateMap(Reference, Map), Maps).
+
+updateMap([], _) -> [];
+updateMap([gap|RefT], [gap|MapT]) -> [gap|updateMap(RefT, MapT)];
+updateMap([fill|RefT], [fill|MapT]) -> [fill|updateMap(RefT, MapT)];
+updateMap([_|RefT], [_|MapT]) -> [unknown|updateMap(RefT, MapT)].
+
+picr2map([0]) -> [];
+picr2map([GapLen]) -> [gap|picr2map([GapLen-1])];
+picr2map([0,0|Others]) -> picr2map(Others);
+picr2map([0,FillLen|Others]) -> [fill|picr2map([0,FillLen-1|Others])];
+picr2map([GapLen,FillLen|Others]) -> [gap|picr2map([GapLen-1,FillLen|Others])].
+
 % Calculate all combinations of a line or column of a picross puzzle.
 % Parameters:
-% - Marks: list of sizes of filled regions
+% - Fills: list of sizes of filled regions
 % - Length: length of the line or column
 % Each element of the answer if a list where the first element is the size of the first gap,
 % followed by the size of the first region, next gap, next region and so on.
-% Call sample: combinations([2,3], 10)
-combinations([], _) -> [];
-combinations(Marks, Length) ->
-    [ [FirstGap|mix(Marks, Gaps)] || [FirstGap|Gaps] <- xfill(Length - lists:sum(Marks), length(Marks) + 1) ].
+% Call sample: picrCombine([2,3], 10)
+picrCombine([], _) -> [];
+picrCombine(Fills, Length) ->
+    [ [FirstGap|mix(Fills, Gaps)] || [FirstGap|Gaps] <- xfill(Length - lists:sum(Fills), length(Fills) + 1) ].
 
 % Discover all combinations of integer lists where:
 % - The number of items is 'Count'
