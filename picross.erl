@@ -1,17 +1,33 @@
 -module(picross).
 -compile(export_all).
 
-% picross:emergeMap(lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10))).
+emergeMap(Reference, [Map|Maps]) ->
+    case matchReferenceMap(Reference, Map) of
+        true -> emergeMap(Map, Reference, Maps);
+        false -> emergeMap(Reference, Maps)
+    end.
 
-emergeMap([Map|Maps]) -> emergeMap(Map, Maps).
+...
 
-emergeMap(Reference, []) -> Reference;
-emergeMap(Reference, [Map|Maps]) -> emergeMap(updateMap(Reference, Map), Maps).
+emergeMap(Reference, [Map:Maps]) ->
+emergeMap(Reference, [Map:Maps]) ->
+    case matchReferenceMap(Reference, Map) of
+        false -> emergeMap(Reference, Maps);
+        true -> emergeMap(updateMap(), Maps)...
 
-updateMap([], _) -> [];
-updateMap([gap|RefT], [gap|MapT]) -> [gap|updateMap(RefT, MapT)];
-updateMap([fill|RefT], [fill|MapT]) -> [fill|updateMap(RefT, MapT)];
-updateMap([_|RefT], [_|MapT]) -> [unknown|updateMap(RefT, MapT)].
+    end.
+
+% picross:emergeReference(lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10))).
+
+emergeReference([Map|Maps]) -> emergeReference(Map, Maps).
+
+emergeReference(Reference, []) -> Reference;
+emergeReference(Reference, [Map|Maps]) -> emergeReference(updateReference(Reference, Map), Maps).
+
+updateReference([], _) -> [];
+updateReference([gap|RefT], [gap|MapT]) -> [gap|updateReference(RefT, MapT)];
+updateReference([fill|RefT], [fill|MapT]) -> [fill|updateReference(RefT, MapT)];
+updateReference([_|RefT], [_|MapT]) -> [unknown|updateReference(RefT, MapT)].
 
 picr2map([0]) -> [];
 picr2map([GapLen]) -> [gap|picr2map([GapLen-1])];
