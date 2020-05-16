@@ -1,33 +1,38 @@
 -module(picross).
 -compile(export_all).
 
-emergeMap(Reference, [Map|Maps]) ->
-    case matchReferenceMap(Reference, Map) of
-        true -> emergeMap(Map, Reference, Maps);
-        false -> emergeMap(Reference, Maps)
+% Maps = lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10)).
+% FirstClue = picross:emergeClue(Maps).
+% NewClue = picross:emergeClue(OldClue, Maps).
+
+emergeClue([Map|Maps]) -> emergeClue(lists:duplicate(length(Map), unknown), [Map|Maps]).
+
+emergeClue(Clue, [Map|Maps]) ->
+    case matchMapClue(Map, Clue) of
+        false -> emergeClue(Clue, Maps);
+        true -> emergeClue(Clue, Map, Maps)
     end.
 
-...
+emergeClue(_, Result, []) -> Result;
+emergeClue(Clue, Result, [Map|Maps]) ->
+    emergeClue(
+      Clue,
+      case matchMapClue(Map, Clue) of
+          true->updateClue(Result, Map);
+          _ -> Result
+      end,
+      Maps).
 
-emergeMap(Reference, [Map:Maps]) ->
-emergeMap(Reference, [Map:Maps]) ->
-    case matchReferenceMap(Reference, Map) of
-        false -> emergeMap(Reference, Maps);
-        true -> emergeMap(updateMap(), Maps)...
+matchMapClue([], []) -> true;
+matchMapClue([_|MapT], [unknown|ClueT]) -> matchMapClue(MapT, ClueT);
+matchMapClue([gap|MapT], [gap|ClueT]) -> matchMapClue(MapT, ClueT);
+matchMapClue([fill|MapT], [fill|ClueT]) -> matchMapClue(MapT, ClueT);
+matchMapClue([_|_], [_|_]) -> false.
 
-    end.
-
-% picross:emergeReference(lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10))).
-
-emergeReference([Map|Maps]) -> emergeReference(Map, Maps).
-
-emergeReference(Reference, []) -> Reference;
-emergeReference(Reference, [Map|Maps]) -> emergeReference(updateReference(Reference, Map), Maps).
-
-updateReference([], _) -> [];
-updateReference([gap|RefT], [gap|MapT]) -> [gap|updateReference(RefT, MapT)];
-updateReference([fill|RefT], [fill|MapT]) -> [fill|updateReference(RefT, MapT)];
-updateReference([_|RefT], [_|MapT]) -> [unknown|updateReference(RefT, MapT)].
+updateClue([], _) -> [];
+updateClue([gap|RefT], [gap|MapT]) -> [gap|updateClue(RefT, MapT)];
+updateClue([fill|RefT], [fill|MapT]) -> [fill|updateClue(RefT, MapT)];
+updateClue([_|RefT], [_|MapT]) -> [unknown|updateClue(RefT, MapT)].
 
 picr2map([0]) -> [];
 picr2map([GapLen]) -> [gap|picr2map([GapLen-1])];
