@@ -21,12 +21,13 @@ test() ->
 %    [gap, fill, gap, fill, gap]].
 
 solve(Rows, Cols) ->
-    RowSolvers = lists:map(fun(Fills) -> spawn(picross, solver, [length(Cols), Fills, true]) end, Rows),
-    ColSolvers = lists:map(fun(Fills) -> spawn(picross, solver, [length(Rows), Fills, false]) end, Cols),
+    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(0, length(Rows) - 1), Rows)),
+    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(0, length(Cols) - 1), Cols)),
     lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
     lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
-    lists:map(fun(Pid) -> Pid ! { go, self() } end, RowSolvers ++ ColSolvers),
+    lists:map(fun(Pid) -> Pid ! go end, RowSolvers ++ ColSolvers),
     SolverMap = wait(RowSolvers, maps:from_list(lists:zip(RowSolvers, lists:duplicate(length(RowSolvers), [])))),
+    % FIXME: sort by Id instead?
     lists:map(fun(Key) -> maps:get(Key, SolverMap) end, RowSolvers).
 
 wait([], Result) -> Result;
@@ -35,14 +36,28 @@ wait(RemainingSolvers, Result) ->
         { From, FillMap } -> wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result))
     end.
 
-solver(Length, Fills, MustReport) ->
+solver(Id, Length, Fills, ReportPid) ->
+    solver(Id, Length, Fills, ReportPid, [], emergeClue(lists:map(fun picr2map/1, picrCombine(Fills, Length)))).
+
+solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
     receive
-        { go, From } ->
-            if
-                MustReport -> From ! { self(), [fill, fill, fill, gap, gap] };
-                true -> self()
+        { solvers, Solvers } -> solver(Id, Length, Fills, ReportPid, Solvers, Clue);
+        % { hint, Position, Hint } ->
+        go ->
+            hintSolvers(Id, TransposedSolvers, Clue),
+            Answer = { self(), Clue },
+            case ReportPid of
+                none -> Answer;
+                _ -> ReportPid ! Answer
             end
     end.
+
+hintSolvers(_, [], []) -> ok;
+hintSolvers(Position, [_|Solvers], [unknown|Hints]) ->
+    hintSolvers(Position, Solvers, Hints);
+hintSolvers(Position, [Solver|Solvers], [Hint|Hints]) ->
+    Solver ! { hint, Position, Hint },
+    hintSolvers(Position, Solvers, Hints).
 
 % Maps = lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10)).
 % FirstClue = picross:emergeClue(Maps).
