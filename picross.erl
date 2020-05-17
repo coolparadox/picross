@@ -1,6 +1,49 @@
 -module(picross).
 -compile(export_all).
 
+test() ->
+    % ###..
+    % .#..#
+    % .####
+    % .###.
+    % .#.#.
+    [[fill, fill, fill, gap, gap],
+    [gap, fill, gap, gap, fill],
+    [gap, fill, fill, fill, fill],
+    [gap, fill, fill, fill, gap],
+    [gap, fill, gap, fill, gap]] =
+    solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]).
+
+%solve(_, _) -> [[fill, fill, fill, gap, gap],
+%    [gap, fill, gap, gap, fill],
+%    [gap, fill, fill, fill, fill],
+%    [gap, fill, fill, fill, gap],
+%    [gap, fill, gap, fill, gap]].
+
+solve(Rows, Cols) ->
+    RowSolvers = lists:map(fun(Fills) -> spawn(picross, solver, [length(Cols), Fills, true]) end, Rows),
+    ColSolvers = lists:map(fun(Fills) -> spawn(picross, solver, [length(Rows), Fills, false]) end, Cols),
+    lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
+    lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
+    lists:map(fun(Pid) -> Pid ! { go, self() } end, RowSolvers ++ ColSolvers),
+    SolverMap = wait(RowSolvers, maps:from_list(lists:zip(RowSolvers, lists:duplicate(length(RowSolvers), [])))),
+    lists:map(fun(Key) -> maps:get(Key, SolverMap) end, RowSolvers).
+
+wait([], Result) -> Result;
+wait(RemainingSolvers, Result) ->
+    receive
+        { From, FillMap } -> wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result))
+    end.
+
+solver(Length, Fills, MustReport) ->
+    receive
+        { go, From } ->
+            if
+                MustReport -> From ! { self(), [fill, fill, fill, gap, gap] };
+                true -> self()
+            end
+    end.
+
 % Maps = lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10)).
 % FirstClue = picross:emergeClue(Maps).
 % NewClue = picross:emergeClue(OldClue, Maps).
