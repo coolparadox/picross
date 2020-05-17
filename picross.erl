@@ -21,8 +21,8 @@ test() ->
 %    [gap, fill, gap, fill, gap]].
 
 solve(Rows, Cols) ->
-    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(0, length(Rows) - 1), Rows)),
-    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(0, length(Cols) - 1), Cols)),
+    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
+    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
     lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
     lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
     lists:map(fun(Pid) -> Pid ! go end, RowSolvers ++ ColSolvers),
@@ -37,19 +37,48 @@ wait(RemainingSolvers, Result) ->
     end.
 
 solver(Id, Length, Fills, ReportPid) ->
-    solver(Id, Length, Fills, ReportPid, [], emergeClue(lists:map(fun picr2map/1, picrCombine(Fills, Length)))).
+    solver(Id, Length, Fills, ReportPid, [], emergeClue(mapCombine(Fills, Length))).
 
 solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
     receive
         { solvers, Solvers } -> solver(Id, Length, Fills, ReportPid, Solvers, Clue);
-        % { hint, Position, Hint } ->
+        { hint, Position, Hint } ->
+            { IsNewHint, HintedClue } = acknowledgeHint(Clue, Position, Hint),
+            case IsNewHint of
+                false -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue);
+                true ->
+                    NewClue = emergeClue(HintedClue, mapCombine(Fills, Length)),
+                    hintSolvers(Id, TransposedSolvers, emergeHints(Clue, NewClue)),
+                    case lists:member(unknown, NewClue) of
+                        true -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, NewClue);
+                        false ->
+                            Answer = { self(), NewClue },
+                            case ReportPid of
+                                none -> Answer;
+                                _ -> ReportPid ! Answer
+                            end
+                    end
+            end;
         go ->
             hintSolvers(Id, TransposedSolvers, Clue),
-            Answer = { self(), Clue },
-            case ReportPid of
-                none -> Answer;
-                _ -> ReportPid ! Answer
-            end
+            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue)
+    end.
+
+emergeHints([], []) -> [];
+emergeHints([unknown|OldHints], [NewHint|NewHints]) ->
+    [NewHint|emergeHints(OldHints, NewHints)];
+emergeHints([_|OldHints], [_|NewHints]) ->
+    [unknown|emergeHints(OldHints, NewHints)].
+
+acknowledgeHint(Clue, Position, Hint) ->
+    case { lists:nth(Position, Clue), Hint } of
+        { unknown, _ } ->
+            {Before, [_|After]} = lists:split(Position - 1, Clue),
+            { true, Before ++ [Hint|After] };
+        { fill, fill } ->
+            { false, [] };
+        { gap, gap } ->
+            { false, [] }
     end.
 
 hintSolvers(_, [], []) -> ok;
@@ -58,6 +87,8 @@ hintSolvers(Position, [_|Solvers], [unknown|Hints]) ->
 hintSolvers(Position, [Solver|Solvers], [Hint|Hints]) ->
     Solver ! { hint, Position, Hint },
     hintSolvers(Position, Solvers, Hints).
+
+mapCombine(Fills, Length) -> lists:map(fun picr2map/1, picrCombine(Fills, Length)).
 
 % Maps = lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10)).
 % FirstClue = picross:emergeClue(Maps).
