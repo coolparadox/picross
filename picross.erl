@@ -2,6 +2,8 @@
 -compile(export_all).
 
 test() ->
+
+    % horse
     % ###..
     % .#..#
     % .####
@@ -14,26 +16,27 @@ test() ->
     [gap, fill, gap, fill, gap]] =
     solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]).
 
-%solve(_, _) -> [[fill, fill, fill, gap, gap],
-%    [gap, fill, gap, gap, fill],
-%    [gap, fill, fill, fill, fill],
-%    [gap, fill, fill, fill, gap],
-%    [gap, fill, gap, fill, gap]].
+%    % dubious
+%    % #.
+%    % .#
+%    [[fill, gap], [gap, fill]] = solve([[1], [1]], [[1], [1]]).
 
 solve(Rows, Cols) ->
-    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
-    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn(picross, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
+    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
+    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
     lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
     lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
     lists:map(fun(Pid) -> Pid ! go end, RowSolvers ++ ColSolvers),
     SolverMap = wait(RowSolvers, maps:from_list(lists:zip(RowSolvers, lists:duplicate(length(RowSolvers), [])))),
-    % FIXME: sort by Id instead?
     lists:map(fun(Key) -> maps:get(Key, SolverMap) end, RowSolvers).
 
 wait([], Result) -> Result;
 wait(RemainingSolvers, Result) ->
     receive
-        { From, FillMap } -> wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result))
+        { From, FillMap } ->
+            wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result));
+        Unexpected ->
+            exit({"unexpected message", Unexpected})
     end.
 
 solver(Id, Length, Fills, ReportPid) ->
@@ -41,7 +44,8 @@ solver(Id, Length, Fills, ReportPid) ->
 
 solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
     receive
-        { solvers, Solvers } -> solver(Id, Length, Fills, ReportPid, Solvers, Clue);
+        { solvers, Solvers } ->
+            solver(Id, Length, Fills, ReportPid, Solvers, Clue);
         { hint, Position, Hint } ->
             { IsNewHint, HintedClue } = acknowledgeHint(Clue, Position, Hint),
             case IsNewHint of
@@ -61,7 +65,9 @@ solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
             end;
         go ->
             hintSolvers(Id, TransposedSolvers, Clue),
-            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue)
+            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue);
+        Unexpected ->
+            exit({"unexpected message", Unexpected})
     end.
 
 emergeHints([], []) -> [];
