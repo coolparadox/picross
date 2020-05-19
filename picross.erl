@@ -9,52 +9,75 @@ test() ->
     % .####
     % .###.
     % .#.#.
-    [[fill, fill, fill, gap, gap],
-    [gap, fill, gap, gap, fill],
-    [gap, fill, fill, fill, fill],
-    [gap, fill, fill, fill, gap],
-    [gap, fill, gap, fill, gap]] =
-    solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]).
+    { ok,
+      [[fill, fill, fill, gap, gap],
+       [gap, fill, gap, gap, fill],
+       [gap, fill, fill, fill, fill],
+       [gap, fill, fill, fill, gap],
+       [gap, fill, gap, fill, gap]] } =
+    solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
 
-%    % dubious
-%    % #.
-%    % .#
-%    [[fill, gap], [gap, fill]] = solve([[1], [1]], [[1], [1]]).
+    % dubious
+    % #.
+    % .#
+    { ambiguous, _ } = solve([[1], [1]], [[1], [1]]).
 
 solve(Rows, Cols) ->
     RowSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Cols), Fills, self()]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
     ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, none]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
+    Watcher = spawn_link(?MODULE, watcher, [self(), maps:from_list(lists:zip(RowSolvers ++ ColSolvers, lists:duplicate(length(RowSolvers ++ ColSolvers), ok)))]),
     lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
     lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
+    lists:map(fun(Pid) -> Pid ! { watcher, Watcher } end, RowSolvers ++ ColSolvers),
     lists:map(fun(Pid) -> Pid ! go end, RowSolvers ++ ColSolvers),
-    SolverMap = wait(RowSolvers, maps:from_list(lists:zip(RowSolvers, lists:duplicate(length(RowSolvers), [])))),
-    lists:map(fun(Key) -> maps:get(Key, SolverMap) end, RowSolvers).
+    case wait(RowSolvers, maps:from_list(lists:zip(RowSolvers, lists:duplicate(length(RowSolvers), [])))) of
+        { ok, SolverMap } -> { ok, lists:map(fun(Key) -> maps:get(Key, SolverMap) end, RowSolvers) };
+        stalled -> { ambiguous, [] };
+        Unexpected -> exit({"unexpected case", Unexpected })
+    end.
 
-wait([], Result) -> Result;
+watcher(ReportPid, SolverStates) ->
+    receive
+        { Solver, stalled } ->
+            NewStates = maps:put(Solver, stalled, SolverStates),
+            case lists:member(ok, maps:values(NewStates)) of
+                true -> watcher(ReportPid, NewStates);
+                false -> ReportPid ! stalled
+            end;
+        { Solver, ok } ->
+            watcher(ReportPid, maps:put(Solver, ok, SolverStates));
+        Unexpected ->
+            exit({"unexpected message", Unexpected})
+    end.
+
+wait([], Result) -> { ok, Result };
 wait(RemainingSolvers, Result) ->
     receive
         { From, FillMap } ->
             wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result));
+        stalled ->
+            stalled;
         Unexpected ->
             exit({"unexpected message", Unexpected})
     end.
 
 solver(Id, Length, Fills, ReportPid) ->
-    solver(Id, Length, Fills, ReportPid, [], emergeClue(mapCombine(Fills, Length))).
+    solver(Id, Length, Fills, ReportPid, [], emergeClue(mapCombine(Fills, Length)), self()).
 
-solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
+solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue, Watcher) ->
     receive
         { solvers, Solvers } ->
-            solver(Id, Length, Fills, ReportPid, Solvers, Clue);
+            solver(Id, Length, Fills, ReportPid, Solvers, Clue, Watcher);
         { hint, Position, Hint } ->
+            Watcher ! { self(), ok },
             { IsNewHint, HintedClue } = acknowledgeHint(Clue, Position, Hint),
             case IsNewHint of
-                false -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue);
+                false -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue, Watcher);
                 true ->
                     NewClue = emergeClue(HintedClue, mapCombine(Fills, Length)),
                     hintSolvers(Id, TransposedSolvers, emergeHints(Clue, NewClue)),
                     case lists:member(unknown, NewClue) of
-                        true -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, NewClue);
+                        true -> solver(Id, Length, Fills, ReportPid, TransposedSolvers, NewClue, Watcher);
                         false ->
                             Answer = { self(), NewClue },
                             case ReportPid of
@@ -63,11 +86,16 @@ solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue) ->
                             end
                     end
             end;
+        { watcher, NewWatcher } ->
+            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue, NewWatcher);
         go ->
             hintSolvers(Id, TransposedSolvers, Clue),
-            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue);
+            solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue, Watcher);
         Unexpected ->
             exit({"unexpected message", Unexpected})
+    after 100 ->
+        Watcher ! { self(), stalled },
+        solver(Id, Length, Fills, ReportPid, TransposedSolvers, Clue, Watcher)
     end.
 
 emergeHints([], []) -> [];
