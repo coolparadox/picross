@@ -20,17 +20,19 @@ test() ->
     % dubious
     % #.
     % .#
-    { ambiguous, _ } = solve([[1], [1]], [[1], [1]]).
+    ambiguous = solve([[1], [1]], [[1], [1]]),
+
+    ok.
 
 solve(Rows, Cols) ->
     RowSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Cols), Fills, row]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
     ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, col]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
     lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
     lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
-    register(solversListener, self()),
-    Answer = listen(RowSolvers ++ ColSolvers),
-    unregister(solversListener),
-    Answer.
+    case listen(RowSolvers ++ ColSolvers) of
+        stalled -> ambiguous;
+        { ok, SolversResult } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, SolversResult) end, RowSolvers) }
+    end.
 
 %watcher(ReportPid, SolverStates) ->
 %    receive
@@ -66,10 +68,31 @@ solve(Rows, Cols) ->
 %    end.
 
 listen(Solvers) ->
-    listen2(maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working)))).
+    register(listener, self()),
+    lists:map(fun(Pid) -> Pid ! go end, Solvers),
+    Answer = listen(maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
+    unregister(listener),
+    Answer.
 
-listen2(SolversState) ->
+listen(SolversState, SolversResult) ->
     receive
+        { Solver, working } ->
+            listen(maps:put(Solver, working, SolversState), SolversResult);
+        { Solver, stalled } ->
+            NewSolversState = maps:put(Solver, stalled, SolversState),
+            case lists:member(working, maps:values(NewSolversState)) of
+                true -> listen(NewSolversState, SolversResult);
+                false ->
+                    lists:map(fun(Pid) -> Pid ! terminate end, maps:keys(SolversState)),
+                    stalled
+            end;
+        { Solver, done, Tag, Id, Result } ->
+            NewSolversState = maps:remove(Solver, SolversState),
+            NewSolversResult = maps:put(Solver, Result, SolversResult),
+            case maps:size(NewSolversState) of
+                0 -> { ok, NewSolversResult };
+                _ -> listen(NewSolversState, NewSolversResult)
+            end;
         Unexpected ->
             exit({ "unexpected message", Unexpected })
     end.
@@ -79,6 +102,16 @@ solver(Id, Length, Fills, Tag) ->
 
 solver(Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
     receive
+        terminate ->
+            ok;
+        go ->
+            hintSolvers(Id, TransposedSolvers, Clue),
+            case lists:member(unknown, Clue) of
+                true ->
+                    solver(Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                false ->
+                    listener ! { self(), done, Tag, Id, Clue }
+            end;
         { solvers, Solvers } ->
             solver(Id, Length, Fills, Tag, Solvers, Clue);
         { hint, Position, Hint } ->
@@ -86,23 +119,20 @@ solver(Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
             case IsNewHint of
                 false -> solver(Id, Length, Fills, Tag, TransposedSolvers, Clue);
                 true ->
-                    solversListener ! { self(), working },
+                    listener ! { self(), working },
                     NewClue = emergeClue(HintedClue, mapCombine(Fills, Length)),
                     hintSolvers(Id, TransposedSolvers, emergeHints(Clue, NewClue)),
                     case lists:member(unknown, NewClue) of
                         true ->
                             solver(Id, Length, Fills, Tag, TransposedSolvers, NewClue);
                         false ->
-                            solversListener ! { self(), done, Tag, Id, NewClue }
+                            listener ! { self(), done, Tag, Id, NewClue }
                     end
             end;
-        go ->
-            hintSolvers(Id, TransposedSolvers, Clue),
-            solver(Id, Length, Fills, Tag, TransposedSolvers, Clue);
         Unexpected ->
             exit({ "unexpected message", Unexpected })
-    after 500 ->
-        solversListener ! { self(), stalled },
+    after 100 ->
+        listener ! { self(), stalled },
         solver(Id, Length, Fills, Tag, TransposedSolvers, Clue)
     end.
 
