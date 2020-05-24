@@ -3,7 +3,27 @@
 
 test() ->
 
-    % horse
+    % bad inputs
+    badarg = solve([], [[1]]),
+    badarg = solve([[]], [[1]]),
+    badarg = solve([[0]], [[1]]),
+    badarg = solve([[1]], [[1, qwerty]]),
+    badarg = solve([[1]], [[-1]]),
+    badarg = solve([[1]], [[2]]),
+    badarg = solve([[1]], [1]),
+
+    % simplest
+    { ok, [[fill]]} = solve([[1]], [[1]]),
+
+    % 2x2 full
+    { ok, [[fill, fill], [fill, fill]] } = solve([[2], [2]], [[2], [2]]),
+
+    % not unique
+    % #. | .#
+    % .# | #.
+    ambiguous = solve([[1], [1]], [[1], [1]]),
+
+    % 5x5 horse
     % ###..
     % .#..#
     % .####
@@ -17,55 +37,45 @@ test() ->
        [gap, fill, gap, fill, gap]] } =
     solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
 
-    % dubious
-    % #.
-    % .#
-    ambiguous = solve([[1], [1]], [[1], [1]]),
+    % nonsense
+    invalid = solve([[2], [2]], [[1], [1]]),
+
+    % not square
+    % ...
 
     ok.
 
 solve(Rows, Cols) ->
-    RowSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Cols), Fills, row]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
-    ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, col]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
-    lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
-    lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
-    case listen(RowSolvers ++ ColSolvers) of
-        stalled -> ambiguous;
-        { ok, SolversResult } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, SolversResult) end, RowSolvers) }
+    case check_inputs(Rows, Cols) of
+        false -> badarg;
+        true ->
+            RowSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Cols), Fills, row]) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
+            ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, col]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
+            lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
+            lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
+            case listen(RowSolvers ++ ColSolvers) of
+                stalled -> ambiguous;
+                { ok, SolversResult } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, SolversResult) end, RowSolvers) }
+            end
     end.
 
-%watcher(ReportPid, SolverStates) ->
-%    receive
-%        { Solver, ok } ->
-%            watcher(ReportPid, maps:put(Solver, ok, SolverStates));
-%        { Solver, done } ->
-%            watcher(ReportPid, maps:remove(Solver, SolverStates));
-%        { Solver, stalled } ->
-%            NewStates = maps:put(Solver, stalled, SolverStates),
-%            case lists:member(ok, maps:values(NewStates)) of
-%                true ->
-%                    watcher(ReportPid, NewStates);
-%                false ->
-%                    ReportPid ! stalled,
-%                    watcher(ReportPid, NewStates)
-%            end;
-%        terminate ->
-%            lists:map(fun(Pid) -> Pid ! terminate end, maps:keys(SolverStates)),
-%            ok;
-%        Unexpected ->
-%            exit({"unexpected message", Unexpected})
-%    end.
-%
-%wait([], Result) -> { ok, Result };
-%wait(RemainingSolvers, Result) ->
-%    receive
-%        { From, FillMap } ->
-%            wait(lists:delete(From, RemainingSolvers), maps:put(From, FillMap, Result));
-%        stalled ->
-%            stalled;
-%        Unexpected ->
-%            exit({"unexpected message", Unexpected})
-%    end.
+check_inputs([], _) -> false;
+check_inputs(_, []) -> false;
+check_inputs(Rows, Cols) ->
+    is_list(Rows)
+    andalso is_list(Cols)
+    andalso check_inputs2(Rows, length(Cols))
+    andalso check_inputs2(Cols, length(Rows)).
+
+check_inputs2([], _) -> false;
+check_inputs2(Fills, Max) ->
+    is_list(Fills)
+    andalso lists:all(fun(Fill) -> check_inputs3(Fill, Max) end, Fills).
+
+check_inputs3([], _) -> false;
+check_inputs3(Fill, Max) ->
+    is_list(Fill)
+    andalso lists:all(fun(Val) -> Val > 0 andalso Val =< Max end, Fill).
 
 listen(Solvers) ->
     register(listener, self()),
