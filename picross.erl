@@ -86,7 +86,7 @@ listen(SolversState, SolversResult) ->
                     lists:map(fun(Pid) -> Pid ! terminate end, maps:keys(SolversState)),
                     stalled
             end;
-        { Solver, done, Tag, Id, Result } ->
+        { Solver, done, Result } ->
             NewSolversState = maps:remove(Solver, SolversState),
             NewSolversResult = maps:put(Solver, Result, SolversResult),
             case maps:size(NewSolversState) of
@@ -98,9 +98,13 @@ listen(SolversState, SolversResult) ->
     end.
 
 solver(Id, Length, Fills, Tag) ->
-    solver(Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
+    solver(false, Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
 
-solver(Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
+solver(Stalled, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
+    Timeout = case Stalled of
+                  true -> infinity;
+                  false -> 50
+              end,
     receive
         terminate ->
             ok;
@@ -108,32 +112,35 @@ solver(Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
             hintSolvers(Id, TransposedSolvers, Clue),
             case lists:member(unknown, Clue) of
                 true ->
-                    solver(Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                    solver(false, Id, Length, Fills, Tag, TransposedSolvers, Clue);
                 false ->
-                    listener ! { self(), done, Tag, Id, Clue }
+                    listener ! { self(), done, Clue }
             end;
         { solvers, Solvers } ->
-            solver(Id, Length, Fills, Tag, Solvers, Clue);
+            solver(false, Id, Length, Fills, Tag, Solvers, Clue);
         { hint, Position, Hint } ->
             { IsNewHint, HintedClue } = acknowledgeHint(Clue, Position, Hint),
             case IsNewHint of
-                false -> solver(Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                false -> solver(false, Id, Length, Fills, Tag, TransposedSolvers, Clue);
                 true ->
                     listener ! { self(), working },
                     NewClue = emergeClue(HintedClue, mapCombine(Fills, Length)),
                     hintSolvers(Id, TransposedSolvers, emergeHints(Clue, NewClue)),
                     case lists:member(unknown, NewClue) of
                         true ->
-                            solver(Id, Length, Fills, Tag, TransposedSolvers, NewClue);
+                            solver(false, Id, Length, Fills, Tag, TransposedSolvers, NewClue);
                         false ->
-                            listener ! { self(), done, Tag, Id, NewClue }
+                            listener ! { self(), done, NewClue }
                     end
             end;
         Unexpected ->
             exit({ "unexpected message", Unexpected })
-    after 100 ->
-        listener ! { self(), stalled },
-        solver(Id, Length, Fills, Tag, TransposedSolvers, Clue)
+    after Timeout ->
+        case Stalled of
+            true -> ok;
+            false -> listener ! { self(), stalled }
+        end,
+        solver(true, Id, Length, Fills, Tag, TransposedSolvers, Clue)
     end.
 
 emergeHints([], []) -> [];
