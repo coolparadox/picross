@@ -53,10 +53,13 @@ solve(Rows, Cols) ->
             ColSolvers = lists:map(fun({ Id, Fills }) -> spawn_link(?MODULE, solver, [Id, length(Rows), Fills, col]) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
             lists:map(fun(Pid) -> Pid ! { solvers, ColSolvers } end, RowSolvers),
             lists:map(fun(Pid) -> Pid ! { solvers, RowSolvers } end, ColSolvers),
-            case listen(RowSolvers ++ ColSolvers) of
+            Answer = case listen(RowSolvers ++ ColSolvers) of
                 stalled -> ambiguous;
+                nonsense -> invalid;
                 { ok, SolversResult } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, SolversResult) end, RowSolvers) }
-            end
+            end,
+            lists:map(fun(Pid) -> Pid ! terminate end, RowSolvers ++ ColSolvers),
+            Answer
     end.
 
 check_inputs([], _) -> false;
@@ -80,40 +83,44 @@ check_inputs3(Fill, Max) ->
 listen(Solvers) ->
     register(listener, self()),
     lists:map(fun(Pid) -> Pid ! go end, Solvers),
-    Answer = listen(maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
+    Answer = listen(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
     unregister(listener),
     Answer.
 
-listen(SolversState, SolversResult) ->
-    receive
-        { Solver, working } ->
-            listen(maps:put(Solver, working, SolversState), SolversResult);
-        { Solver, stalled } ->
-            NewSolversState = maps:put(Solver, stalled, SolversState),
-            case lists:member(working, maps:values(NewSolversState)) of
-                true -> listen(NewSolversState, SolversResult);
-                false ->
-                    lists:map(fun(Pid) -> Pid ! terminate end, maps:keys(SolversState)),
-                    stalled
+listen(IsGoodResult, SolversState, SolversResult) ->
+    case lists:member(working, maps:values(SolversState)) of
+        true ->
+            receive
+                { Solver, working } ->
+                    listen(IsGoodResult, maps:put(Solver, working, SolversState), SolversResult);
+                { Solver, stalled } ->
+                    listen(IsGoodResult, maps:put(Solver, stalled, SolversState), SolversResult);
+                { Solver, done, Result } ->
+                    listen(IsGoodResult, maps:put(Solver, done, SolversState), maps:put(Solver, Result, SolversResult));
+                { _, badhint } ->
+                    listen(false, SolversState, SolversResult);
+                Unexpected ->
+                    exit({ "unexpected message", Unexpected })
             end;
-        { Solver, done, Result } ->
-            NewSolversState = maps:remove(Solver, SolversState),
-            NewSolversResult = maps:put(Solver, Result, SolversResult),
-            case maps:size(NewSolversState) of
-                0 -> { ok, NewSolversResult };
-                _ -> listen(NewSolversState, NewSolversResult)
-            end;
-        Unexpected ->
-            exit({ "unexpected message", Unexpected })
+        false ->
+            case IsGoodResult of
+                true ->
+                    case lists:member(stalled, maps:values(SolversState)) of
+                        true -> stalled;
+                        false -> { ok, SolversResult }
+                    end;
+                false -> nonsense
+            end
     end.
 
 solver(Id, Length, Fills, Tag) ->
-    solver(false, Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
+    solver(working, Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
 
-solver(Stalled, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
-    Timeout = case Stalled of
-                  true -> infinity;
-                  false -> 50
+solver(State, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
+    Timeout = case State of
+                  stalled -> infinity;
+                  done -> infinity;
+                  _ -> 500
               end,
     receive
         terminate ->
@@ -122,35 +129,45 @@ solver(Stalled, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
             hintSolvers(Id, TransposedSolvers, Clue),
             case lists:member(unknown, Clue) of
                 true ->
-                    solver(false, Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                    solver(working, Id, Length, Fills, Tag, TransposedSolvers, Clue);
                 false ->
                     listener ! { self(), done, Clue }
             end;
         { solvers, Solvers } ->
-            solver(false, Id, Length, Fills, Tag, Solvers, Clue);
+            solver(working, Id, Length, Fills, Tag, Solvers, Clue);
         { hint, Position, Hint } ->
-            { IsNewHint, HintedClue } = acknowledgeHint(Clue, Position, Hint),
-            case IsNewHint of
-                false -> solver(false, Id, Length, Fills, Tag, TransposedSolvers, Clue);
-                true ->
+            { HintQuality, HintedClue } = acknowledgeHint(Clue, Position, Hint),
+            case HintQuality of
+                nonsense ->
+                    listener ! { self(), badhint },
+                    solver(solverWorkingOrDone(State), Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                known ->
+                    solver(solverWorkingOrDone(State), Id, Length, Fills, Tag, TransposedSolvers, Clue);
+                useful ->
                     listener ! { self(), working },
                     NewClue = emergeClue(HintedClue, mapCombine(Fills, Length)),
                     hintSolvers(Id, TransposedSolvers, emergeHints(Clue, NewClue)),
                     case lists:member(unknown, NewClue) of
                         true ->
-                            solver(false, Id, Length, Fills, Tag, TransposedSolvers, NewClue);
+                            solver(working, Id, Length, Fills, Tag, TransposedSolvers, NewClue);
                         false ->
-                            listener ! { self(), done, NewClue }
-                    end
+                            listener ! { self(), done, NewClue },
+                            solver(done, Id, Length, Fills, Tag, TransposedSolvers, NewClue)
+                    end;
+                Unexpected ->
+                    exit({ "unexpected hint quality", Unexpected })
             end;
         Unexpected ->
             exit({ "unexpected message", Unexpected })
     after Timeout ->
-        case Stalled of
-            true -> ok;
-            false -> listener ! { self(), stalled }
-        end,
-        solver(true, Id, Length, Fills, Tag, TransposedSolvers, Clue)
+        listener ! { self(), stalled },
+        solver(stalled, Id, Length, Fills, Tag, TransposedSolvers, Clue)
+    end.
+
+solverWorkingOrDone(State) ->
+    case State of
+        done -> done;
+        _ -> working
     end.
 
 emergeHints([], []) -> [];
@@ -163,11 +180,13 @@ acknowledgeHint(Clue, Position, Hint) ->
     case { lists:nth(Position, Clue), Hint } of
         { unknown, _ } ->
             {Before, [_|After]} = lists:split(Position - 1, Clue),
-            { true, Before ++ [Hint|After] };
+            { useful, Before ++ [Hint|After] };
         { fill, fill } ->
-            { false, [] };
+            { known, [] };
         { gap, gap } ->
-            { false, [] }
+            { known, [] };
+        _ ->
+            { nonsense, [] }
     end.
 
 hintSolvers(_, [], []) -> ok;
