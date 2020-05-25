@@ -38,6 +38,9 @@ test() ->
     solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
 
     % nonsense
+    invalid = solve([[1], [2]], [[2], [2]]),
+    invalid = solve([[2], [1]], [[2], [2]]),
+    invalid = solve([[2], [2]], [[1], [2]]),
     invalid = solve([[2], [2]], [[2], [1]]),
 
     % not square
@@ -84,31 +87,32 @@ listen(Solvers) ->
     register(listener, self()),
     lists:map(fun(Pid) -> Pid ! go end, Solvers),
     Answer2 = listen(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
-%    receive
-%    after 500 ->
-%              ok
-%    end,
+    receive after 100 -> ok end,  % argh. wait a bit before unregister the listener.
     flush(),
     unregister(listener),
     Answer2.
 
-flush() -> receive _ -> flush() after 0 -> ok end.
+flush() ->
+    receive
+        _ -> flush()
+    after 0 -> ok
+    end.
 
 listen(IsGoodResult, SolversState, SolversResult) ->
     case lists:member(working, maps:values(SolversState)) of
         true ->
             receive
                 { Solver, working } ->
-                    io:format("~w working~n", [Solver]),
+                    % io:format("~w working~n", [Solver]),
                     listen(IsGoodResult, maps:put(Solver, working, SolversState), SolversResult);
                 { Solver, stalled } ->
-                    io:format("~w stalled~n", [Solver]),
+                    % io:format("~w stalled~n", [Solver]),
                     listen(IsGoodResult, maps:put(Solver, stalled, SolversState), SolversResult);
                 { Solver, done, Result } ->
-                    io:format("~w done~n", [Solver]),
+                    % io:format("~w done~n", [Solver]),
                     listen(IsGoodResult, maps:put(Solver, done, SolversState), maps:put(Solver, Result, SolversResult));
-                { Solver, badhint } ->
-                    io:format("~w bad hint~n", [Solver]),
+                { _, badhint } ->
+                    % io:format("~w bad hint~n", [Solver]),
                     listen(false, SolversState, SolversResult)
             end;
         false ->
@@ -125,8 +129,8 @@ listen(IsGoodResult, SolversState, SolversResult) ->
 doubleCheckGoodResult(false) -> false;
 doubleCheckGoodResult(true) ->
     receive
-        { Solver, badhint } ->
-            io:format("~w bad hint~n", [Solver]),
+        { _, badhint } ->
+            % io:format("~w bad hint~n", [Solver]),
             false;
         _ -> doubleCheckGoodResult(true)
     after 0 -> true
@@ -184,7 +188,7 @@ solver(working, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
                             solver(done, Id, Length, Fills, Tag, TransposedSolvers, NewClue)
                     end
             end
-    after 5 ->
+    after 1000 ->
         listener ! { self(), stalled },
         solver(working, Id, Length, Fills, Tag, TransposedSolvers, Clue)
     end;
