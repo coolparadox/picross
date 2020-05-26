@@ -36,8 +36,19 @@ test() ->
        [gap, fill, gap, fill, gap]] } =
     solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
 
-    % not square
-    % ...
+    % A non square puzzle
+    % ###..##.##
+    % ###.#....#
+    % ####..####
+    % ##.#.#...#
+    { ok,
+      [[fill, fill, fill, gap, gap, fill, fill, gap, fill, fill],
+       [fill, fill, fill, gap, fill, gap, gap, gap, gap, fill],
+       [fill, fill, fill, fill, gap, gap, fill, fill, fill, fill],
+       [fill, fill, gap, fill, gap, fill, gap, gap, gap, fill]] } =
+    solve(
+      [[3,2,2],[3,1,1],[4,4],[2,1,1,1]],
+      [[4],[4],[3],[2],[1],[1,1],[1,1],[1],[1,1],[4]]),
 
     ok.
 
