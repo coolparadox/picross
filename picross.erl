@@ -46,11 +46,163 @@ test() ->
        [fill, fill, fill, gap, fill, gap, gap, gap, gap, fill],
        [fill, fill, fill, fill, gap, gap, fill, fill, fill, fill],
        [fill, fill, gap, fill, gap, fill, gap, gap, gap, fill]] } =
+    solve([[3,2,2],[3,1,1],[4,4],[2,1,1,1]], [[4],[4],[3],[2],[1],[1,1],[1,1],[1],[1,1],[4]]),
+
+    % 15x15 duck
+    % .........###...
+    % ........#####..
+    % .......####.###
+    % .......#######.
+    % ........#####..
+    % .........###...
+    % ........#####..
+    % #.....########.
+    % ###..###...###.
+    % #######.###.##.
+    % .#####.####.##.
+    % .########..##..
+    % ..##########...
+    % ....##.###.....
+    % ......######...
+    { ok,
+      [[gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap],
+       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
+       [gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, gap, fill, fill, fill],
+       [gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap],
+       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
+       [gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap],
+       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
+       [fill, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, gap],
+       [fill, fill, fill, gap, gap, fill, fill, fill, gap, gap, gap, fill, fill, fill, gap],
+       [fill, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, gap, fill, fill, gap],
+       [gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, gap, fill, fill, gap],
+       [gap, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill, fill, gap, gap],
+       [gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap],
+       [gap, gap, gap, gap, fill, fill, gap, fill, fill, fill, gap, gap, gap, gap, gap],
+       [gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap]] } =
     solve(
-      [[3,2,2],[3,1,1],[4,4],[2,1,1,1]],
-      [[4],[4],[3],[2],[1],[1,1],[1,1],[1],[1,1],[4]]),
+      [[3],[5],[4,3],[7],[5],[3],[5],[1,8],[3,3,3],[7,3,2],[5,4,2],[8,2],[10],[2,3],[6]],
+      [[3],[4],[5],[4],[5],[6],[3,2,1],[2,2,5],[4,2,6],[8,2,3],[8,2,1,1],[2,6,2,1],[4,6],[2,4],[1]]),
+
+    % 25x25 owl
+    % ###.....########......###
+    % .#######################.
+    % ...###...######...###....
+    % .#######..####..#######..
+    % .##...###..##..###..####.
+    % ##.....##..##.##......##.
+    % #...#.#..#.##.#..#.#...##
+    % #...####.##.###.####...##
+    % #.###..##.#..#.##..###..#
+    % #..#.##.#.#..#.#.##.#...#
+    % #.##.##.#.#..#.#.##.##..#
+    % #..##..##.#..#.##..##..##
+    % #...####.#..#.#.####...##
+    % ##..#.#.##.###.#.#.#..###
+    % .###...##.#####.#....##..
+    % ...######.#####.######...
+    % #...###....###..........#
+    % ###.........#..........##
+    % .###..................###
+    % ..###.###...##.####..##..
+    % ...#######.###########..#
+    % #.......#####.####......#
+    % #.####.............####.#
+    % #...#################...#
+    % ###...#####...#####...###
+    { ok,
+      [[fill, fill, fill, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, fill, fill, fill],
+       [gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap],
+       [gap, gap, gap, fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap],
+       [gap, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill, fill, fill, fill, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap, gap],
+       [gap, fill, fill, gap, gap, gap, fill, fill, fill, gap, gap, fill, fill, gap, gap, fill, fill, fill, gap, gap, fill, fill, fill, fill, gap],
+       [fill, fill, gap, gap, gap, gap, gap, fill, fill, gap, gap, fill, fill, gap, fill, fill, gap, gap, gap, gap, gap, gap, fill, fill, gap],
+       [fill, gap, gap, gap, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, gap, gap, gap, fill, fill],
+       [fill, gap, gap, gap, fill, fill, fill, fill, gap, fill, fill, gap, fill, fill, fill, gap, fill, fill, fill, fill, gap, gap, gap, fill, fill],
+       [fill, gap, fill, fill, fill, gap, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, gap, fill, fill, fill, gap, gap, fill],
+       [fill, gap, gap, fill, gap, fill, fill, gap, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, gap, gap, gap, fill],
+       [fill, gap, fill, fill, gap, fill, fill, gap, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, fill, gap, gap, fill],
+       [fill, gap, gap, fill, fill, gap, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, gap, fill, fill, gap, gap, fill, fill],
+       [fill, gap, gap, gap, fill, fill, fill, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, fill, fill, gap, gap, gap, fill, fill],
+       [fill, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, fill, fill, gap, fill, gap, fill, gap, fill, gap, gap, fill, fill, fill],
+       [gap, fill, fill, fill, gap, gap, gap, fill, fill, gap, fill, fill, fill, fill, fill, gap, fill, gap, gap, gap, gap, fill, fill, gap, gap],
+       [gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap],
+       [fill, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill],
+       [fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill],
+       [gap, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill],
+       [gap, gap, fill, fill, fill, gap, fill, fill, fill, gap, gap, gap, fill, fill, gap, fill, fill, fill, fill, gap, gap, fill, fill, gap, gap],
+       [gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill],
+       [fill, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, fill],
+       [fill, gap, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, gap, fill],
+       [fill, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap, fill],
+       [fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill]] } =
+    solve(
+      [[3,8,3],
+       [23],
+       [3,6,3],
+       [7,4,7],
+       [2,3,2,3,4],
+       [2,2,2,2,2],
+       [1,1,1,1,2,1,1,1,2],
+       [1,4,2,3,4,2],
+       [1,3,2,1,1,2,3,1],
+       [1,1,2,1,1,1,1,2,1,1],
+       [1,2,2,1,1,1,1,2,2,1],
+       [1,2,2,1,1,2,2,2],
+       [1,4,1,1,1,4,2],
+       [2,1,1,2,3,1,1,1,3],
+       [3,2,5,1,2],
+       [6,5,6],
+       [1,3,3,1],
+       [3,1,2],
+       [3,3],
+       [3,3,2,4,2],
+       [7,11,1],
+       [1,5,4,1],
+       [1,4,4,1],
+       [1,17,1],
+       [3,5,5,3]],
+      [[1,9,2,4],
+       [2,3,2,2,1],
+       [2,2,1,1,1,3,1,1],
+       [3,4,2,3,1],
+       [3,3,3,2,2,2],
+       [3,1,2,1,2,1,2],
+       [1,2,2,2,2,2,2,2],
+       [1,3,2,2,2,2,2],
+       [2,2,4,3,3,2],
+       [3,2,2,2,2],
+       [4,5,2,1,2],
+       [7,4,2,1],
+       [8,6,3,1],
+       [4,5,4,2,1],
+       [3,3,1,2,2,2],
+       [2,2,4,1,3,2],
+       [1,2,2,2,2,3,2],
+       [1,2,2,2,2,1,3,2],
+       [3,1,2,1,1,2,2],
+       [3,3,3,1,1,2],
+       [4,4,1,1,2],
+       [1,2,1,1,2,2,1],
+       [2,3,2,2,1,1],
+       [2,4,3,2,1],
+       [1,8,3,5]]),
 
     ok.
+
+printMap([]) -> ok;
+printMap([Row|Rows]) ->
+    printRow(Row),
+    printMap(Rows).
+
+printRow([]) ->
+    io:format("~n");
+printRow([fill|Marks]) ->
+    io:format("#"),
+    printRow(Marks);
+printRow([gap|Marks]) ->
+    io:format("."),
+    printRow(Marks).
 
 solve(Rows, Cols) ->
     case check_inputs(Rows, Cols) of
@@ -120,7 +272,7 @@ manage(IsGoodResult, SolversState, SolversResult) ->
 
 waitTermination(IsGoodResult, Stalled, SolversState, SolversResult) ->
     case lists:all(fun(State) -> case State of terminate -> true; _ -> false end end, maps:values(SolversState)) of
-        true -> 
+        true ->
             case IsGoodResult of
                 false -> nonsense;
                 true ->
