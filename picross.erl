@@ -3,7 +3,6 @@
 
 test() ->
 
-    % bad inputs
     badarg = solve([], [[1]]),
     badarg = solve([[]], [[1]]),
     badarg = solve([[0]], [[1]]),
@@ -11,17 +10,17 @@ test() ->
     badarg = solve([[1]], [[-1]]),
     badarg = solve([[1]], [[2]]),
     badarg = solve([[1]], [1]),
-
-    % simplest
     { ok, [[fill]]} = solve([[1]], [[1]]),
 
-    % 2x2 full
-    { ok, [[fill, fill], [fill, fill]] } = solve([[2], [2]], [[2], [2]]),
-
-    % not unique
-    % #. | .#
-    % .# | #.
     ambiguous = solve([[1], [1]], [[1], [1]]),
+    invalid = solve([[1], [2]], [[2], [2]]),
+    invalid = solve([[2], [1]], [[2], [2]]),
+    invalid = solve([[2], [2]], [[1], [2]]),
+    invalid = solve([[2], [2]], [[2], [1]]),
+    { ok,
+      [[fill, fill],
+       [fill, fill]] } =
+    solve([[2], [2]], [[2], [2]]),
 
     % 5x5 horse
     % ###..
@@ -36,12 +35,6 @@ test() ->
        [gap, fill, fill, fill, gap],
        [gap, fill, gap, fill, gap]] } =
     solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
-
-    % nonsense
-    invalid = solve([[1], [2]], [[2], [2]]),
-    invalid = solve([[2], [1]], [[2], [2]]),
-    invalid = solve([[2], [2]], [[1], [2]]),
-    invalid = solve([[2], [2]], [[2], [1]]),
 
     % not square
     % ...
@@ -86,38 +79,32 @@ check_inputs3(Fill, Max) ->
 manage(Solvers) ->
     register(solverManager, self()),
     lists:map(fun(Pid) -> Pid ! go end, Solvers),
-    Answer2 = manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), work))), maps:new()),
-%    receive after 100 -> ok end,  % argh. wait a bit before unregister the solverManager.
-%    flush(),
+    Answer = manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), work))), maps:new()),
     unregister(solverManager),
-    Answer2.
-
-%flush() ->
-%    receive
-%        _ -> flush()
-%    after 0 -> ok
-%    end.
+    Answer.
 
 manage(IsGoodResult, SolversState, SolversResult) ->
     case lists:member(work, maps:values(SolversState)) of
         true ->
             receive
                 { Solver, work } ->
-                    io:format("~w work~n", [Solver]),
+                    %io:format("~w work~n", [Solver]),
                     manage(IsGoodResult, maps:put(Solver, work, SolversState), SolversResult);
                 { Solver, wait } ->
-                    io:format("~w wait~n", [Solver]),
+                    %io:format("~w wait~n", [Solver]),
                     manage(IsGoodResult, maps:put(Solver, wait, SolversState), SolversResult);
                 { Solver, done, Result } ->
-                    io:format("~w done~n", [Solver]),
+                    %io:format("~w done~n", [Solver]),
                     manage(IsGoodResult, maps:put(Solver, done, SolversState), maps:put(Solver, Result, SolversResult));
-                { Solver, badhint } ->
-                    io:format("~w bad hint~n", [Solver]),
-                    manage(false, SolversState, SolversResult)
+                { _, badhint } ->
+                    %io:format("~w bad hint~n", [Solver]),
+                    manage(false, SolversState, SolversResult);
+                Unexpected ->
+                    exit("unexpected message", Unexpected)
             end;
         false ->
             lists:map(fun(Pid) -> Pid ! terminate end, maps:keys(SolversState)),
-            waitTermination(IsGoodResult, lists:member(stalled, maps:values(SolversState)), SolversState, SolversResult)
+            waitTermination(IsGoodResult, lists:member(wait, maps:values(SolversState)), SolversState, SolversResult)
     end.
 
 waitTermination(IsGoodResult, Stalled, SolversState, SolversResult) ->
@@ -134,25 +121,31 @@ waitTermination(IsGoodResult, Stalled, SolversState, SolversResult) ->
         false ->
             receive
                 { Solver, terminate } ->
-                    io:format("~w terminate~n", [Solver]),
+                    %io:format("~w terminate~n", [Solver]),
                     waitTermination(IsGoodResult, Stalled, maps:put(Solver, terminate, SolversState), SolversResult);
-                { Solver, badhint } ->
-                    io:format("~w bad hint~n", [Solver]),
-                    waitTermination(false, Stalled, SolversState, SolversResult)
+                { _, badhint } ->
+                    %io:format("~w bad hint~n", [Solver]),
+                    waitTermination(false, Stalled, SolversState, SolversResult);
+                { _, done, _ } ->
+                    %io:format("~w done~n", [Solver]),
+                    waitTermination(IsGoodResult, Stalled, SolversState, SolversResult);
+                Unexpected ->
+                    exit("unexpected message", Unexpected)
             after 1000 ->
                       exit("termination timeout")
             end
     end.
 
 solver(Id, Length, Fills, Tag) ->
-    solver(start, Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
+    solver(work, Id, Length, Fills, Tag, [], emergeClue(mapCombine(Fills, Length))).
 
-solver(start, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
-    solverManager ! { self(), work },
+solver(work, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
     receive
         { solvers, Solvers } ->
-            solver(start, Id, Length, Fills, Tag, Solvers, Clue);
+            %io:format("~w ~B work: solvers~n", [Tag, Id]),
+            solver(work, Id, Length, Fills, Tag, Solvers, Clue);
         go ->
+            %io:format("~w ~B work: go~n", [Tag, Id]),
             hintSolvers(Id, TransposedSolvers, Clue),
             case lists:member(unknown, Clue) of
                 true ->
@@ -161,23 +154,7 @@ solver(start, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
                     solver(done, Id, Length, Fills, Tag, TransposedSolvers, Clue)
             end;
         { hint, Position, Hint } ->
-            { HintQuality, HintedClue } = acknowledgeHint(Clue, Position, Hint),
-            case HintQuality of
-                nonsense ->
-                    solverManager ! { self(), badhint },
-                    solver(start, Id, Length, Fills, Tag, TransposedSolvers, Clue);
-                known ->
-                    solver(start, Id, Length, Fills, Tag, TransposedSolvers, Clue);
-                useful ->
-                    solver(start, Id, Length, Fills, Tag, TransposedSolvers, HintedClue)
-            end
-    end;
-solver(work, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
-    solverManager ! { self(), wait },
-    receive
-        terminate ->
-            solverManager ! { self(), terminate };
-        { hint, Position, Hint } ->
+            %io:format("~w ~B work: hint ~B ~w~n", [Tag, Id, Position, Hint]),
             solverManager ! { self(), work },
             { HintQuality, HintedClue } = acknowledgeHint(Clue, Position, Hint),
             case HintQuality of
@@ -195,14 +172,21 @@ solver(work, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
                         false ->
                             solver(done, Id, Length, Fills, Tag, TransposedSolvers, NewClue)
                     end
-            end
+            end;
+        terminate ->
+            %io:format("~w ~B work: terminate~n", [Tag, Id]),
+            solverManager ! { self(), terminate };
+        Unexpected ->
+            exit("unexpected message", Unexpected)
+    after 100 ->
+        solverManager ! { self(), wait },
+        solver(work, Id, Length, Fills, Tag, TransposedSolvers, Clue)
     end;
 solver(done, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
-    solverManager ! { self(), done },
+    solverManager ! { self(), done, Clue },
     receive
-        terminate ->
-            solverManager ! { self(), terminate };
         { hint, Position, Hint } ->
+            %io:format("~w ~B done: hint ~B ~w~n", [Tag, Id, Position, Hint]),
             { HintQuality, _ } = acknowledgeHint(Clue, Position, Hint),
             case HintQuality of
                 nonsense ->
@@ -210,7 +194,12 @@ solver(done, Id, Length, Fills, Tag, TransposedSolvers, Clue) ->
                     solver(done, Id, Length, Fills, Tag, TransposedSolvers, Clue);
                 known ->
                     solver(done, Id, Length, Fills, Tag, TransposedSolvers, Clue)
-            end
+            end;
+        terminate ->
+            %io:format("~w ~B done: terminate~n", [Tag, Id]),
+            solverManager ! { self(), terminate };
+        Unexpected ->
+            exit("unexpected message", Unexpected)
     end.
 
 emergeHints([], []) -> [];
