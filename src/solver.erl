@@ -14,21 +14,21 @@
 test() ->
 
     % Solve '1' in the first row of a puzzle with 1 column.
-    Solver1 = spawn_link(solver, solver, [1, 1, [1], tag, self()]),
-    Solver1 ! { solvers, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1]) },
-    Solver1 ! go,
+    Solver1 = start_link(1, 1, [1], tag, self()),
+    setSolvers(Solver1, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1])),
+    solve(Solver1),
     % This puzzle can be solved immediately.
     { Solver1, done, [fill] } = nextMessage(),
     % Also the solver of the first column should be hinted that its first position is filled.
     { 1, { hint, 1, fill } } = nextMessage(),
     % Verify termination.
-    Solver1 ! terminate,
+    terminate(Solver1),
     { Solver1, terminated } = nextMessage(),
 
     % Same as above, but the solver receives a nonsense hint.
-    Solver1a = spawn_link(solver, solver, [1, 1, [1], tag, self()]),
-    Solver1a ! { solvers, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1]) },
-    Solver1a ! go,
+    Solver1a = start_link(1, 1, [1], tag, self()),
+    setSolvers(Solver1a, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1])),
+    solve(Solver1a),
     { Solver1a, done, [fill] } = nextMessage(),
     { 1, { hint, 1, fill } } = nextMessage(),
     % Simulate the solver of the column hinting an absurd information.
@@ -37,13 +37,13 @@ test() ->
     { Solver1a, badhint } = nextMessage(),
     { Solver1a, done, [fill] } = nextMessage(),
     % Verify termination.
-    Solver1a ! terminate,
+    terminate(Solver1a),
     { Solver1a, terminated } = nextMessage(),
 
     % Solve '2' in the fifth row of a puzzle with 3 columns.
-    Solver2 = spawn_link(solver, solver, [5, 3, [2], tag, self()]),
-    Solver2 ! { solvers, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1, 2, 3]) },
-    Solver2 ! go,
+    Solver2 = start_link(5, 3, [2], tag, self()),
+    setSolvers(Solver2, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1, 2, 3])),
+    solve(Solver2),
     % The initial information is only enough to determine that the middle position is filled, ie: '?#?'
     % The solver of the second column should be hinted that its fifth position is a fill.
     { 2, { hint, 5, fill } } = nextMessage(),
@@ -57,7 +57,7 @@ test() ->
     { Solver2, done, [gap, fill, fill] } = nextMessage(),
     { 3, { hint, 5, fill } } = nextMessage(),
     % Verify termination.
-    Solver2 ! terminate,
+    terminate(Solver2),
     { Solver2, terminated } = nextMessage(),
 
     ok.
@@ -77,12 +77,27 @@ nextMessage() ->
               error(timeout)
     end.
 
-solver(Id, Length, Fills, Tag, Manager) ->
+start(Id, Length, Fills, Tag, Manager) ->
+    spawn(?MODULE, init, [Id, Length, Fills, Tag, Manager]).
+
+start_link(Id, Length, Fills, Tag, Manager) ->
+    spawn_link(?MODULE, init, [Id, Length, Fills, Tag, Manager]).
+
+init(Id, Length, Fills, Tag, Manager) ->
     case check_inputs(Fills, Length) of
         false -> badarg;
         true ->
             solver(working, #state{tag=Tag, id=Id, length=Length, fills=Fills, clue=emergeClue(mapCombine(Fills, Length)), manager=Manager})
     end.
+
+setSolvers(Solver, Solvers) ->
+    Solver ! { solvers, Solvers }.
+
+solve(Solver) ->
+    Solver ! solve.
+
+terminate(Solver) ->
+    Solver ! terminate.
 
 check_inputs([], _) -> false;
 check_inputs(Fills, Max) ->
@@ -93,7 +108,7 @@ solver(working, S) ->
     receive
         { solvers, Solvers } ->
             solver(working, S#state{solvers=Solvers, stalled=false});
-        go ->
+        solve ->
             hintSolvers(S#state.id, S#state.solvers, S#state.clue),
             case lists:member(unknown, S#state.clue) of
                 true ->
