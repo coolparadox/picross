@@ -7,6 +7,7 @@
          terminate/1,
          init/5]).
 -record(state, { tag, id, length, fills, clue, manager, solvers=[], stalled=false }).
+-define(StallTimeout, 100).
 
 test() ->
 
@@ -16,7 +17,7 @@ test() ->
                 Message ->
                     Pid ! { Tag, Message },
                     Forwarder()
-                after 1000 -> ok
+                after 10 * ?StallTimeout -> ok
             end
         end)
     end,
@@ -24,7 +25,7 @@ test() ->
     GetNextMessage = fun() ->
         receive
             Message -> Message
-        after 200 ->
+        after 2 * ?StallTimeout ->
                   error(timeout)
         end
     end,
@@ -144,7 +145,7 @@ solver(working, S) ->
             S#state.manager ! { self(), terminated };
         Unexpected ->
             error(unexpected, [Unexpected])
-    after case S#state.stalled of true -> infinity; false -> 100 end ->
+    after case S#state.stalled of true -> infinity; false -> ?StallTimeout end ->
         S#state.manager ! { self(), stalled },
         solver(working, S#state{stalled=true})
     end;
