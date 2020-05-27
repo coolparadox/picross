@@ -1,81 +1,83 @@
 -module(solver).
--compile(export_all).
--record(state, {
-          tag,
-          id,
-          length,
-          fills,
-          clue,
-          manager,
-          solvers=[],
-          stalled=false
-         }).
+-export([test/0,
+         start/5,
+         start_link/5,
+         set_solvers/2,
+         solve/1,
+         terminate/1,
+         init/5]).
+-record(state, { tag, id, length, fills, clue, manager, solvers=[], stalled=false }).
 
 test() ->
 
+    StartMessageForwarder = fun(Tag, Pid) ->
+        spawn_link(fun Forwarder() ->
+            receive
+                Message ->
+                    Pid ! { Tag, Message },
+                    Forwarder()
+                after 1000 -> ok
+            end
+        end)
+    end,
+
+    GetNextMessage = fun() ->
+        receive
+            Message -> Message
+        after 200 ->
+                  error(timeout)
+        end
+    end,
+
     % Solve '1' in the first row of a puzzle with 1 column.
     Solver1 = start_link(1, 1, [1], tag, self()),
-    setSolvers(Solver1, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1])),
+    %set_solvers(Solver1, lists:map(fun(Id) -> spawn_link(solver, MessageForwarder, [Id, self()]) end, [1])),
+    set_solvers(Solver1, [StartMessageForwarder(1, self())]),
     solve(Solver1),
     % This puzzle can be solved immediately.
-    { Solver1, done, [fill] } = nextMessage(),
+    { Solver1, done, [fill] } = GetNextMessage(),
     % Also the solver of the first column should be hinted that its first position is filled.
-    { 1, { hint, 1, fill } } = nextMessage(),
+    { 1, { hint, 1, fill } } = GetNextMessage(),
     % Verify termination.
     terminate(Solver1),
-    { Solver1, terminated } = nextMessage(),
+    { Solver1, terminated } = GetNextMessage(),
 
     % Same as above, but the solver receives a nonsense hint.
     Solver1a = start_link(1, 1, [1], tag, self()),
-    setSolvers(Solver1a, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1])),
+    set_solvers(Solver1a, [StartMessageForwarder(1, self())]),
     solve(Solver1a),
-    { Solver1a, done, [fill] } = nextMessage(),
-    { 1, { hint, 1, fill } } = nextMessage(),
+    { Solver1a, done, [fill] } = GetNextMessage(),
+    { 1, { hint, 1, fill } } = GetNextMessage(),
     % Simulate the solver of the column hinting an absurd information.
     % The bad hint should be acknowledged.
     Solver1a ! { hint, 1, gap },
-    { Solver1a, badhint } = nextMessage(),
-    { Solver1a, done, [fill] } = nextMessage(),
+    { Solver1a, badhint } = GetNextMessage(),
+    { Solver1a, done, [fill] } = GetNextMessage(),
     % Verify termination.
     terminate(Solver1a),
-    { Solver1a, terminated } = nextMessage(),
+    { Solver1a, terminated } = GetNextMessage(),
 
     % Solve '2' in the fifth row of a puzzle with 3 columns.
     Solver2 = start_link(5, 3, [2], tag, self()),
-    setSolvers(Solver2, lists:map(fun(Id) -> spawn_link(solver, messageForwarder, [Id, self()]) end, [1, 2, 3])),
+    set_solvers(Solver2, lists:map(fun(Id) -> StartMessageForwarder(Id, self()) end, [1, 2, 3])),
     solve(Solver2),
     % The initial information is only enough to determine that the middle position is filled, ie: '?#?'
-    % The solver of the second column should be hinted that its fifth position is a fill.
-    { 2, { hint, 5, fill } } = nextMessage(),
-    % No further possible work with the available information; check for stall detection.
-    { Solver2, stalled } = nextMessage(),
+    % Therefore the solver of the second column should be hinted that its fifth position is a fill.
+    { 2, { hint, 5, fill } } = GetNextMessage(),
+    % No further work is possible with the available information; check for stall detection.
+    { Solver2, stalled } = GetNextMessage(),
     % Let's simulate receiving a hint from the solver of the first column.
     Solver2 ! { hint, 1, gap },
     % This is a useful information that leads to the solution '.##'
     % and subsequently hinting the remaining solver of the third column.
-    { Solver2, working } = nextMessage(),
-    { Solver2, done, [gap, fill, fill] } = nextMessage(),
-    { 3, { hint, 5, fill } } = nextMessage(),
+    { Solver2, working } = GetNextMessage(),
+    { Solver2, done, [gap, fill, fill] } = GetNextMessage(),
+    { 3, { hint, 5, fill } } = GetNextMessage(),
     % Verify termination.
     terminate(Solver2),
-    { Solver2, terminated } = nextMessage(),
+    { Solver2, terminated } = GetNextMessage(),
 
     ok.
-
-messageForwarder(Tag, Pid) ->
-    receive
-        Message ->
-            Pid ! { Tag, Message },
-            messageForwarder(Tag, Pid)
-    after 1000 -> ok
-    end.
-
-nextMessage() ->
-    receive
-        Message -> Message
-    after 200 ->
-              error(timeout)
-    end.
 
 start(Id, Length, Fills, Tag, Manager) ->
     spawn(?MODULE, init, [Id, Length, Fills, Tag, Manager]).
@@ -87,10 +89,10 @@ init(Id, Length, Fills, Tag, Manager) ->
     case check_inputs(Fills, Length) of
         false -> badarg;
         true ->
-            solver(working, #state{tag=Tag, id=Id, length=Length, fills=Fills, clue=emergeClue(mapCombine(Fills, Length)), manager=Manager})
+            solver(working, #state{tag=Tag, id=Id, length=Length, fills=Fills, clue=emerge_clue(map_combine(Fills, Length)), manager=Manager})
     end.
 
-setSolvers(Solver, Solvers) ->
+set_solvers(Solver, Solvers) ->
     Solver ! { solvers, Solvers }.
 
 solve(Solver) ->
@@ -109,7 +111,7 @@ solver(working, S) ->
         { solvers, Solvers } ->
             solver(working, S#state{solvers=Solvers, stalled=false});
         solve ->
-            hintSolvers(S#state.id, S#state.solvers, S#state.clue),
+            hint_solvers(S#state.id, S#state.solvers, S#state.clue),
             case lists:member(unknown, S#state.clue) of
                 true ->
                     solver(working, S#state{stalled=false});
@@ -121,7 +123,7 @@ solver(working, S) ->
                 true -> S#state.manager ! { self(), working };
                 false -> ok
             end,
-            { HintQuality, HintedClue } = acknowledgeHint(S#state.clue, Position, Hint),
+            { HintQuality, HintedClue } = acknowledge_hint(S#state.clue, Position, Hint),
             case HintQuality of
                 nonsense ->
                     S#state.manager ! { self(), badhint },
@@ -129,8 +131,8 @@ solver(working, S) ->
                 known ->
                     solver(working, S#state{stalled=false});
                 useful ->
-                    NewClue = emergeClue(HintedClue, mapCombine(S#state.fills, S#state.length)),
-                    hintSolvers(S#state.id, S#state.solvers, emergeHints(HintedClue, NewClue)),
+                    NewClue = emerge_clue(HintedClue, map_combine(S#state.fills, S#state.length)),
+                    hint_solvers(S#state.id, S#state.solvers, emerge_hints(HintedClue, NewClue)),
                     case lists:member(unknown, NewClue) of
                         true ->
                             solver(working, S#state{clue=NewClue, stalled=false});
@@ -150,7 +152,7 @@ solver(done, S) ->
     S#state.manager ! { self(), done, S#state.clue },
     receive
         { hint, Position, Hint } ->
-            { HintQuality, _ } = acknowledgeHint(S#state.clue, Position, Hint),
+            { HintQuality, _ } = acknowledge_hint(S#state.clue, Position, Hint),
             case HintQuality of
                 nonsense ->
                     S#state.manager ! { self(), badhint },
@@ -164,13 +166,13 @@ solver(done, S) ->
             error(unexpected, [Unexpected])
     end.
 
-emergeHints([], []) -> [];
-emergeHints([unknown|OldHints], [NewHint|NewHints]) ->
-    [NewHint|emergeHints(OldHints, NewHints)];
-emergeHints([_|OldHints], [_|NewHints]) ->
-    [unknown|emergeHints(OldHints, NewHints)].
+emerge_hints([], []) -> [];
+emerge_hints([unknown|OldHints], [NewHint|NewHints]) ->
+    [NewHint|emerge_hints(OldHints, NewHints)];
+emerge_hints([_|OldHints], [_|NewHints]) ->
+    [unknown|emerge_hints(OldHints, NewHints)].
 
-acknowledgeHint(Clue, Position, Hint) ->
+acknowledge_hint(Clue, Position, Hint) ->
     case { lists:nth(Position, Clue), Hint } of
         { unknown, _ } ->
             {Before, [_|After]} = lists:split(Position - 1, Clue),
@@ -183,53 +185,53 @@ acknowledgeHint(Clue, Position, Hint) ->
             { nonsense, [] }
     end.
 
-hintSolvers(_, [], []) -> ok;
-hintSolvers(Position, [_|Solvers], [unknown|Hints]) ->
-    hintSolvers(Position, Solvers, Hints);
-hintSolvers(Position, [Solver|Solvers], [Hint|Hints]) ->
+hint_solvers(_, [], []) -> ok;
+hint_solvers(Position, [_|Solvers], [unknown|Hints]) ->
+    hint_solvers(Position, Solvers, Hints);
+hint_solvers(Position, [Solver|Solvers], [Hint|Hints]) ->
     Solver ! { hint, Position, Hint },
-    hintSolvers(Position, Solvers, Hints).
+    hint_solvers(Position, Solvers, Hints).
 
-mapCombine(Fills, Length) -> lists:map(fun picr2map/1, picrCombine(Fills, Length)).
+map_combine(Fills, Length) -> lists:map(fun picr_to_map/1, picr_combine(Fills, Length)).
 
-% Maps = lists:map(fun picross:picr2map/1, picross:picrCombine([8], 10)).
-% FirstClue = picross:emergeClue(Maps).
-% NewClue = picross:emergeClue(OldClue, Maps).
+% Maps = lists:map(fun picross:picr_to_map/1, picross:picr_combine([8], 10)).
+% FirstClue = picross:emerge_clue(Maps).
+% NewClue = picross:emerge_clue(OldClue, Maps).
 
-emergeClue([Map|Maps]) -> emergeClue(lists:duplicate(length(Map), unknown), [Map|Maps]).
+emerge_clue([Map|Maps]) -> emerge_clue(lists:duplicate(length(Map), unknown), [Map|Maps]).
 
-emergeClue(Clue, [Map|Maps]) ->
-    case matchMapClue(Map, Clue) of
-        false -> emergeClue(Clue, Maps);
-        true -> emergeClue(Clue, Map, Maps)
+emerge_clue(Clue, [Map|Maps]) ->
+    case match_map_clue(Map, Clue) of
+        false -> emerge_clue(Clue, Maps);
+        true -> emerge_clue(Clue, Map, Maps)
     end.
 
-emergeClue(_, Result, []) -> Result;
-emergeClue(Clue, Result, [Map|Maps]) ->
-    emergeClue(
+emerge_clue(_, Result, []) -> Result;
+emerge_clue(Clue, Result, [Map|Maps]) ->
+    emerge_clue(
       Clue,
-      case matchMapClue(Map, Clue) of
-          true->updateClue(Result, Map);
+      case match_map_clue(Map, Clue) of
+          true->update_clue(Result, Map);
           _ -> Result
       end,
       Maps).
 
-matchMapClue([], []) -> true;
-matchMapClue([_|MapT], [unknown|ClueT]) -> matchMapClue(MapT, ClueT);
-matchMapClue([gap|MapT], [gap|ClueT]) -> matchMapClue(MapT, ClueT);
-matchMapClue([fill|MapT], [fill|ClueT]) -> matchMapClue(MapT, ClueT);
-matchMapClue([_|_], [_|_]) -> false.
+match_map_clue([], []) -> true;
+match_map_clue([_|MapT], [unknown|ClueT]) -> match_map_clue(MapT, ClueT);
+match_map_clue([gap|MapT], [gap|ClueT]) -> match_map_clue(MapT, ClueT);
+match_map_clue([fill|MapT], [fill|ClueT]) -> match_map_clue(MapT, ClueT);
+match_map_clue([_|_], [_|_]) -> false.
 
-updateClue([], _) -> [];
-updateClue([gap|RefT], [gap|MapT]) -> [gap|updateClue(RefT, MapT)];
-updateClue([fill|RefT], [fill|MapT]) -> [fill|updateClue(RefT, MapT)];
-updateClue([_|RefT], [_|MapT]) -> [unknown|updateClue(RefT, MapT)].
+update_clue([], _) -> [];
+update_clue([gap|RefT], [gap|MapT]) -> [gap|update_clue(RefT, MapT)];
+update_clue([fill|RefT], [fill|MapT]) -> [fill|update_clue(RefT, MapT)];
+update_clue([_|RefT], [_|MapT]) -> [unknown|update_clue(RefT, MapT)].
 
-picr2map([0]) -> [];
-picr2map([GapLen]) -> [gap|picr2map([GapLen-1])];
-picr2map([0,0|Others]) -> picr2map(Others);
-picr2map([0,FillLen|Others]) -> [fill|picr2map([0,FillLen-1|Others])];
-picr2map([GapLen,FillLen|Others]) -> [gap|picr2map([GapLen-1,FillLen|Others])].
+picr_to_map([0]) -> [];
+picr_to_map([GapLen]) -> [gap|picr_to_map([GapLen-1])];
+picr_to_map([0,0|Others]) -> picr_to_map(Others);
+picr_to_map([0,FillLen|Others]) -> [fill|picr_to_map([0,FillLen-1|Others])];
+picr_to_map([GapLen,FillLen|Others]) -> [gap|picr_to_map([GapLen-1,FillLen|Others])].
 
 % Calculate all combinations of a line or column of a picross puzzle.
 % Parameters:
@@ -237,9 +239,9 @@ picr2map([GapLen,FillLen|Others]) -> [gap|picr2map([GapLen-1,FillLen|Others])].
 % - Length: length of the line or column
 % Each element of the answer if a list where the first element is the size of the first gap,
 % followed by the size of the first region, next gap, next region and so on.
-% Call sample: picrCombine([2,3], 10)
-picrCombine([], _) -> [];
-picrCombine(Fills, Length) ->
+% Call sample: picr_combine([2,3], 10)
+picr_combine([], _) -> [];
+picr_combine(Fills, Length) ->
     [ [FirstGap|mix(Fills, Gaps)] || [FirstGap|Gaps] <- xfill(Length - lists:sum(Fills), length(Fills) + 1) ].
 
 % Discover all combinations of integer lists where:
