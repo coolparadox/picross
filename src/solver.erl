@@ -144,6 +144,7 @@ solver(working, S) ->
                     solver(done, S#state{stalled=false})
             end;
         { hint, Position, Hint } ->
+            % io:format("~w: got hint: ~B ~w~n", [self(), Position, Hint]),
             case S#state.stalled of
                 true -> S#state.manager ! { self(), working };
                 false -> ok
@@ -191,11 +192,18 @@ solver(done, S) ->
             error(unexpected, [Unexpected])
     end.
 
-emerge_hints([], []) -> [];
-emerge_hints([unknown|OldHints], [NewHint|NewHints]) ->
-    [NewHint|emerge_hints(OldHints, NewHints)];
-emerge_hints([_|OldHints], [_|NewHints]) ->
-    [unknown|emerge_hints(OldHints, NewHints)].
+% emerge_hints([fill,gap,unknown,unknown],[fill,gap,fill,gap]) -> [unknown,unknown,fill,gap]
+emerge_hints(OldHints, NewHints) ->
+    lists:foldr(
+        fun({Old,New}, Acc) ->
+            [case {Old,New} of
+                 {unknown,_} -> New;
+                 _ -> unknown
+             end|Acc]
+        end,
+        [],
+        lists:zip(OldHints, NewHints)
+    ).
 
 acknowledge_hint(Clue, Position, Hint) ->
     case { lists:nth(Position, Clue), Hint } of
