@@ -247,36 +247,39 @@ match_map_clue([gap|MapT], [gap|ClueT]) -> match_map_clue(MapT, ClueT);
 match_map_clue([fill|MapT], [fill|ClueT]) -> match_map_clue(MapT, ClueT);
 match_map_clue([_|_], [_|_]) -> false.
 
-update_clue([], _) -> [];
-update_clue([gap|RefT], [gap|MapT]) -> [gap|update_clue(RefT, MapT)];
-update_clue([fill|RefT], [fill|MapT]) -> [fill|update_clue(RefT, MapT)];
-update_clue([_|RefT], [_|MapT]) -> [unknown|update_clue(RefT, MapT)].
+% update_clue([gap,gap,fill,fill],[gap,fill,gap,fill]) -> [gap,unknown,unknown,fill]
+update_clue(Reference, Map) ->
+    lists:foldr(
+        fun({R,M}, Acc) ->
+            [case {R,M} of
+                {gap,gap} -> gap;
+                {fill,fill} -> fill;
+                _ -> unknown
+            end | Acc]
+        end,
+        [],
+        lists:zip(Reference, Map)
+    ).
 
-picr_to_map([0]) -> [];
-picr_to_map([GapLen]) -> [gap|picr_to_map([GapLen-1])];
-picr_to_map([0,0|Others]) -> picr_to_map(Others);
-picr_to_map([0,FillLen|Others]) -> [fill|picr_to_map([0,FillLen-1|Others])];
-picr_to_map([GapLen,FillLen|Others]) -> [gap|picr_to_map([GapLen-1,FillLen|Others])].
+% picr_to_map([1,2,3,3,1]) -> [gap,fill,fill,gap,gap,gap,fill,fill,fill,gap]
+picr_to_map(Picr) -> picr_to_map(Picr, gap, []).
+picr_to_map([], _, Acc) -> lists:reverse(Acc);
+picr_to_map([0|Tail], gap, Acc) -> picr_to_map(Tail, fill, Acc);
+picr_to_map([0|Tail], fill, Acc) -> picr_to_map(Tail, gap, Acc);
+picr_to_map([N|Tail], gap, Acc) -> picr_to_map([N-1|Tail], gap, [gap|Acc]);
+picr_to_map([N|Tail], fill, Acc) -> picr_to_map([N-1|Tail], fill, [fill|Acc]).
 
 % Calculate all combinations of a line or column of a picross puzzle.
 % Parameters:
 % - Fills: list of sizes of filled regions
 % - Length: length of the line or column
-% Each element of the answer if a list where the first element is the size of the first gap,
+% Each element of the answer is a list where the first element is the size of the first gap,
 % followed by the size of the first region, next gap, next region and so on.
 % Call sample: picr_combine([2,3], 10)
 picr_combine([], _) -> [];
 picr_combine(Fills, Length) ->
-    [ [FirstGap|mix(Fills, Gaps)] || [FirstGap|Gaps] <- xfill(Length - lists:sum(Fills), length(Fills) + 1) ].
-
-% Discover all combinations of integer lists where:
-% - The number of items is 'Count'
-% - Each element is equal or greater than 1
-% - The sum of all elements is 'Sum'
-% Call sample: hfill(5,3)
-hfill(Sum, 1) -> [[Sum]];
-hfill(Sum, Count) when Count > 1 andalso Sum >= Count ->
-    [ [H|T] || H <- lists:seq(1,Sum-(Count-1)), T <- hfill(Sum-H, Count-1) ].
+    % io:format("~w: picr_combine(~w, ~B)~n", [self(), Fills, Length]),
+    [ [FirstGap|blend(Fills, Gaps)] || [FirstGap|Gaps] <- xfill(Length - lists:sum(Fills), length(Fills) + 1) ].
 
 % Discover all combinations of integer lists where:
 % - The number of items is 'Count'
@@ -289,7 +292,22 @@ xfill(Sum, 2) ->
 xfill(Sum, Count) when Count > 2 andalso Sum >= Count - 2 ->
     [ [L|Middle] ++ [R] || L <- lists:seq(0,Sum-(Count-2)), R <- lists:seq(0, Sum-(Count-2)-L), Middle <- hfill(Sum-L-R, Count-2) ].
 
-% Mix two lists, alternating elements
-% Call sample: mix([1,2],[3,4])
-mix([], _) -> [];
-mix([H1|T1], [H2|T2]) -> [H1|[H2|mix(T1,T2)]].
+% Discover all combinations of integer lists where:
+% - The number of items is 'Count'
+% - Each element is equal or greater than 1
+% - The sum of all elements is 'Sum'
+% Example: hfill(5,3) -> [[1,1,3],[1,2,2],[1,3,1],[2,1,2],[2,2,1],[3,1,1]]
+hfill(Sum, 1) -> [[Sum]];
+hfill(Sum, Count) when Count > 1 andalso Sum >= Count ->
+    [ [H|T] || H <- lists:seq(1,Sum-(Count-1)), T <- hfill(Sum-H, Count-1) ].
+
+% Blend two lists of equal size, alternating elements
+% Example: blend([1,2],[3,4]) -> [1,3,2,4]
+blend(L1,L2) ->
+    lists:foldr(
+        fun({H1,H2}, Acc) ->
+            [H1|[H2|Acc]]
+        end,
+        [],
+        lists:zip(L1, L2)
+     ).
