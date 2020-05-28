@@ -3,7 +3,7 @@
          start/5,
          start_link/5,
          set_solvers/2,
-         solve/1,
+         go/1,
          terminate/1,
          init/5]).
 -record(state, { tag, id, length, fills, clue, manager, solvers=[], stalled=false }).
@@ -32,9 +32,8 @@ test() ->
 
     % Solve '1' in the first row of a puzzle with 1 column.
     Solver1 = start_link(1, 1, [1], tag, self()),
-    %set_solvers(Solver1, lists:map(fun(Id) -> spawn_link(solver, MessageForwarder, [Id, self()]) end, [1])),
     set_solvers(Solver1, [StartMessageForwarder(1, self())]),
-    solve(Solver1),
+    go(Solver1),
     % This puzzle can be solved immediately.
     { Solver1, done, [fill] } = GetNextMessage(),
     % Also the solver of the first column should be hinted that its first position is filled.
@@ -46,7 +45,7 @@ test() ->
     % Same as above, but the solver receives a nonsense hint.
     Solver1a = start_link(1, 1, [1], tag, self()),
     set_solvers(Solver1a, [StartMessageForwarder(1, self())]),
-    solve(Solver1a),
+    go(Solver1a),
     { Solver1a, done, [fill] } = GetNextMessage(),
     { 1, { hint, 1, fill } } = GetNextMessage(),
     % Simulate the solver of the column hinting an absurd information.
@@ -61,7 +60,7 @@ test() ->
     % Solve '2' in the fifth row of a puzzle with 3 columns.
     Solver2 = start_link(5, 3, [2], tag, self()),
     set_solvers(Solver2, lists:map(fun(Id) -> StartMessageForwarder(Id, self()) end, [1, 2, 3])),
-    solve(Solver2),
+    go(Solver2),
     % The initial information is only enough to determine that the middle position is filled, ie: '?#?'
     % Therefore the solver of the second column should be hinted that its fifth position is a fill.
     { 2, { hint, 5, fill } } = GetNextMessage(),
@@ -96,8 +95,8 @@ init(Id, Length, Fills, Tag, Manager) ->
 set_solvers(Solver, Solvers) ->
     Solver ! { solvers, Solvers }.
 
-solve(Solver) ->
-    Solver ! solve.
+go(Solver) ->
+    Solver ! go.
 
 terminate(Solver) ->
     Solver ! terminate.
@@ -111,7 +110,7 @@ solver(working, S) ->
     receive
         { solvers, Solvers } ->
             solver(working, S#state{solvers=Solvers, stalled=false});
-        solve ->
+        go ->
             hint_solvers(S#state.id, S#state.solvers, S#state.clue),
             case lists:member(unknown, S#state.clue) of
                 true ->
