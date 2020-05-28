@@ -5,11 +5,36 @@
          set_solvers/2,
          go/1,
          terminate/1,
-         init/5]).
+         init/5,
+         str_to_map/1,
+         map_to_str/1]).
 -record(state, { tag, id, length, fills, clue, manager, solvers=[], stalled=false }).
 -define(StallTimeout, 100).
 
+str_to_map(Str) ->
+    lists:map(
+        fun(Char) ->
+            case Char of
+                $# -> fill;
+                $. -> gap;
+                $? -> unknown
+            end
+        end, Str).
+
+map_to_str(Map) ->
+    lists:map(
+        fun(Mark) ->
+            case Mark of
+                fill -> $#;
+                gap -> $.;
+                unknown -> $?
+            end
+        end, Map).
+
 test() ->
+
+    [fill, gap, unknown] = str_to_map("#.?"),
+    "#.?" = map_to_str([fill, gap, unknown]),
 
     StartMessageForwarder = fun(Tag, Pid) ->
         spawn_link(fun Forwarder() ->

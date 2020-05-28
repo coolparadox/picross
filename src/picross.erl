@@ -1,6 +1,8 @@
 -module(picross).
 -export([test/0,
-         solve/2]).
+         solve/2,
+         map_to_str/1,
+         str_to_map/1]).
 
 test() ->
 
@@ -18,192 +20,204 @@ test() ->
     invalid = solve([[2], [1]], [[2], [2]]),
     invalid = solve([[2], [2]], [[1], [2]]),
     invalid = solve([[2], [2]], [[2], [1]]),
-    { ok,
-      [[fill, fill],
-       [fill, fill]] } =
-    solve([[2], [2]], [[2], [2]]),
+
+    TestMap = fun(Str, Rows, Cols) ->
+        Map = str_to_map(lists:filter(fun(Elem) -> Elem =/= $  end, Str)),
+        { ok, Map } = solve(Rows, Cols)
+    end,
+
+    % 2x2 fill
+    TestMap(
+        "##
+         ##
+        ",
+        [[2],
+         [2]],
+        [[2],
+         [2]]),
 
     % 5x5 horse
-    % ###..
-    % .#..#
-    % .####
-    % .###.
-    % .#.#.
-    { ok,
-      [[fill, fill, fill, gap, gap],
-       [gap, fill, gap, gap, fill],
-       [gap, fill, fill, fill, fill],
-       [gap, fill, fill, fill, gap],
-       [gap, fill, gap, fill, gap]] } =
-    solve([[3], [1,1], [4], [3], [1,1]], [[1], [5], [1,2], [3], [2]]),
+    TestMap(
+        "###..
+         .#..#
+         .####
+         .###.
+         .#.#.
+        ",
+        [[3],
+         [1,1],
+         [4],
+         [3],
+         [1,1]],
+        [[1],
+         [5],
+         [1,2],
+         [3],
+         [2]]),
 
     % A non square puzzle
-    % ###..##.##
-    % ###.#....#
-    % ####..####
-    % ##.#.#...#
-    { ok,
-      [[fill, fill, fill, gap, gap, fill, fill, gap, fill, fill],
-       [fill, fill, fill, gap, fill, gap, gap, gap, gap, fill],
-       [fill, fill, fill, fill, gap, gap, fill, fill, fill, fill],
-       [fill, fill, gap, fill, gap, fill, gap, gap, gap, fill]] } =
-    solve([[3,2,2],[3,1,1],[4,4],[2,1,1,1]], [[4],[4],[3],[2],[1],[1,1],[1,1],[1],[1,1],[4]]),
+    TestMap(
+        "###..##.##
+         ###.#....#
+         ####..####
+         ##.#.#...#
+        ",
+        [[3,2,2],
+         [3,1,1],
+         [4,4],
+         [2,1,1,1]],
+        [[4],
+         [4],
+         [3],
+         [2],
+         [1],
+         [1,1],
+         [1,1],
+         [1],
+         [1,1],
+         [4]]),
 
     % 15x15 duck
-    % .........###...
-    % ........#####..
-    % .......####.###
-    % .......#######.
-    % ........#####..
-    % .........###...
-    % ........#####..
-    % #.....########.
-    % ###..###...###.
-    % #######.###.##.
-    % .#####.####.##.
-    % .########..##..
-    % ..##########...
-    % ....##.###.....
-    % ......######...
-    { ok,
-      [[gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap],
-       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
-       [gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, gap, fill, fill, fill],
-       [gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap],
-       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
-       [gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap],
-       [gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap],
-       [fill, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, gap],
-       [fill, fill, fill, gap, gap, fill, fill, fill, gap, gap, gap, fill, fill, fill, gap],
-       [fill, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, gap, fill, fill, gap],
-       [gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, gap, fill, fill, gap],
-       [gap, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill, fill, gap, gap],
-       [gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap],
-       [gap, gap, gap, gap, fill, fill, gap, fill, fill, fill, gap, gap, gap, gap, gap],
-       [gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap]] } =
-    solve(
-      [[3],[5],[4,3],[7],[5],[3],[5],[1,8],[3,3,3],[7,3,2],[5,4,2],[8,2],[10],[2,3],[6]],
-      [[3],[4],[5],[4],[5],[6],[3,2,1],[2,2,5],[4,2,6],[8,2,3],[8,2,1,1],[2,6,2,1],[4,6],[2,4],[1]]),
+    TestMap(
+        ".........###...
+         ........#####..
+         .......####.###
+         .......#######.
+         ........#####..
+         .........###...
+         ........#####..
+         #.....########.
+         ###..###...###.
+         #######.###.##.
+         .#####.####.##.
+         .########..##..
+         ..##########...
+         ....##.###.....
+         ......######...
+        ",
+        [[3],
+         [5],
+         [4,3],
+         [7],
+         [5],
+         [3],
+         [5],
+         [1,8],
+         [3,3,3],
+         [7,3,2],
+         [5,4,2],
+         [8,2],
+         [10],
+         [2,3],
+         [6]],
+        [[3],
+         [4],
+         [5],
+         [4],
+         [5],
+         [6],
+         [3,2,1],
+         [2,2,5],
+         [4,2,6],
+         [8,2,3],
+         [8,2,1,1],
+         [2,6,2,1],
+         [4,6],
+         [2,4],
+         [1]]),
 
     % 25x25 owl
-    % ###.....########......###
-    % .#######################.
-    % ...###...######...###....
-    % .#######..####..#######..
-    % .##...###..##..###..####.
-    % ##.....##..##.##......##.
-    % #...#.#..#.##.#..#.#...##
-    % #...####.##.###.####...##
-    % #.###..##.#..#.##..###..#
-    % #..#.##.#.#..#.#.##.#...#
-    % #.##.##.#.#..#.#.##.##..#
-    % #..##..##.#..#.##..##..##
-    % #...####.#..#.#.####...##
-    % ##..#.#.##.###.#.#.#..###
-    % .###...##.#####.#....##..
-    % ...######.#####.######...
-    % #...###....###..........#
-    % ###.........#..........##
-    % .###..................###
-    % ..###.###...##.####..##..
-    % ...#######.###########..#
-    % #.......#####.####......#
-    % #.####.............####.#
-    % #...#################...#
-    % ###...#####...#####...###
-    { ok,
-      [[fill, fill, fill, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, fill, fill, fill],
-       [gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap],
-       [gap, gap, gap, fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap],
-       [gap, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill, fill, fill, fill, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap, gap],
-       [gap, fill, fill, gap, gap, gap, fill, fill, fill, gap, gap, fill, fill, gap, gap, fill, fill, fill, gap, gap, fill, fill, fill, fill, gap],
-       [fill, fill, gap, gap, gap, gap, gap, fill, fill, gap, gap, fill, fill, gap, fill, fill, gap, gap, gap, gap, gap, gap, fill, fill, gap],
-       [fill, gap, gap, gap, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, gap, gap, gap, fill, fill],
-       [fill, gap, gap, gap, fill, fill, fill, fill, gap, fill, fill, gap, fill, fill, fill, gap, fill, fill, fill, fill, gap, gap, gap, fill, fill],
-       [fill, gap, fill, fill, fill, gap, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, gap, fill, fill, fill, gap, gap, fill],
-       [fill, gap, gap, fill, gap, fill, fill, gap, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, gap, gap, gap, fill],
-       [fill, gap, fill, fill, gap, fill, fill, gap, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, fill, gap, gap, fill],
-       [fill, gap, gap, fill, fill, gap, gap, fill, fill, gap, fill, gap, gap, fill, gap, fill, fill, gap, gap, fill, fill, gap, gap, fill, fill],
-       [fill, gap, gap, gap, fill, fill, fill, fill, gap, fill, gap, gap, fill, gap, fill, gap, fill, fill, fill, fill, gap, gap, gap, fill, fill],
-       [fill, fill, gap, gap, fill, gap, fill, gap, fill, fill, gap, fill, fill, fill, gap, fill, gap, fill, gap, fill, gap, gap, fill, fill, fill],
-       [gap, fill, fill, fill, gap, gap, gap, fill, fill, gap, fill, fill, fill, fill, fill, gap, fill, gap, gap, gap, gap, fill, fill, gap, gap],
-       [gap, gap, gap, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, fill, gap, gap, gap],
-       [fill, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill],
-       [fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill],
-       [gap, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill],
-       [gap, gap, fill, fill, fill, gap, fill, fill, fill, gap, gap, gap, fill, fill, gap, fill, fill, fill, fill, gap, gap, fill, fill, gap, gap],
-       [gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, fill],
-       [fill, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, fill, gap, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, fill],
-       [fill, gap, fill, fill, fill, fill, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, gap, fill, fill, fill, fill, gap, fill],
-       [fill, gap, gap, gap, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, fill, gap, gap, gap, fill],
-       [fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill, fill, fill, gap, gap, gap, fill, fill, fill]] } =
-    solve(
-      [[3,8,3],
-       [23],
-       [3,6,3],
-       [7,4,7],
-       [2,3,2,3,4],
-       [2,2,2,2,2],
-       [1,1,1,1,2,1,1,1,2],
-       [1,4,2,3,4,2],
-       [1,3,2,1,1,2,3,1],
-       [1,1,2,1,1,1,1,2,1,1],
-       [1,2,2,1,1,1,1,2,2,1],
-       [1,2,2,1,1,2,2,2],
-       [1,4,1,1,1,4,2],
-       [2,1,1,2,3,1,1,1,3],
-       [3,2,5,1,2],
-       [6,5,6],
-       [1,3,3,1],
-       [3,1,2],
-       [3,3],
-       [3,3,2,4,2],
-       [7,11,1],
-       [1,5,4,1],
-       [1,4,4,1],
-       [1,17,1],
-       [3,5,5,3]],
-      [[1,9,2,4],
-       [2,3,2,2,1],
-       [2,2,1,1,1,3,1,1],
-       [3,4,2,3,1],
-       [3,3,3,2,2,2],
-       [3,1,2,1,2,1,2],
-       [1,2,2,2,2,2,2,2],
-       [1,3,2,2,2,2,2],
-       [2,2,4,3,3,2],
-       [3,2,2,2,2],
-       [4,5,2,1,2],
-       [7,4,2,1],
-       [8,6,3,1],
-       [4,5,4,2,1],
-       [3,3,1,2,2,2],
-       [2,2,4,1,3,2],
-       [1,2,2,2,2,3,2],
-       [1,2,2,2,2,1,3,2],
-       [3,1,2,1,1,2,2],
-       [3,3,3,1,1,2],
-       [4,4,1,1,2],
-       [1,2,1,1,2,2,1],
-       [2,3,2,2,1,1],
-       [2,4,3,2,1],
-       [1,8,3,5]]),
+    TestMap(
+        "###.....########......###
+         .#######################.
+         ...###...######...###....
+         .#######..####..#######..
+         .##...###..##..###..####.
+         ##.....##..##.##......##.
+         #...#.#..#.##.#..#.#...##
+         #...####.##.###.####...##
+         #.###..##.#..#.##..###..#
+         #..#.##.#.#..#.#.##.#...#
+         #.##.##.#.#..#.#.##.##..#
+         #..##..##.#..#.##..##..##
+         #...####.#..#.#.####...##
+         ##..#.#.##.###.#.#.#..###
+         .###...##.#####.#....##..
+         ...######.#####.######...
+         #...###....###..........#
+         ###.........#..........##
+         .###..................###
+         ..###.###...##.####..##..
+         ...#######.###########..#
+         #.......#####.####......#
+         #.####.............####.#
+         #...#################...#
+         ###...#####...#####...###
+        ",
+        [[3,8,3],
+         [23],
+         [3,6,3],
+         [7,4,7],
+         [2,3,2,3,4],
+         [2,2,2,2,2],
+         [1,1,1,1,2,1,1,1,2],
+         [1,4,2,3,4,2],
+         [1,3,2,1,1,2,3,1],
+         [1,1,2,1,1,1,1,2,1,1],
+         [1,2,2,1,1,1,1,2,2,1],
+         [1,2,2,1,1,2,2,2],
+         [1,4,1,1,1,4,2],
+         [2,1,1,2,3,1,1,1,3],
+         [3,2,5,1,2],
+         [6,5,6],
+         [1,3,3,1],
+         [3,1,2],
+         [3,3],
+         [3,3,2,4,2],
+         [7,11,1],
+         [1,5,4,1],
+         [1,4,4,1],
+         [1,17,1],
+         [3,5,5,3]],
+        [[1,9,2,4],
+         [2,3,2,2,1],
+         [2,2,1,1,1,3,1,1],
+         [3,4,2,3,1],
+         [3,3,3,2,2,2],
+         [3,1,2,1,2,1,2],
+         [1,2,2,2,2,2,2,2],
+         [1,3,2,2,2,2,2],
+         [2,2,4,3,3,2],
+         [3,2,2,2,2],
+         [4,5,2,1,2],
+         [7,4,2,1],
+         [8,6,3,1],
+         [4,5,4,2,1],
+         [3,3,1,2,2,2],
+         [2,2,4,1,3,2],
+         [1,2,2,2,2,3,2],
+         [1,2,2,2,2,1,3,2],
+         [3,1,2,1,1,2,2],
+         [3,3,3,1,1,2],
+         [4,4,1,1,2],
+         [1,2,1,1,2,2,1],
+         [2,3,2,2,1,1],
+         [2,4,3,2,1],
+         [1,8,3,5]]),
 
     ok.
 
-printMap([]) -> ok;
-printMap([Row|Rows]) ->
-    printRow(Row),
-    printMap(Rows).
+map_to_str(Maps) ->
+    lists:foldl(fun(Map, Acc) -> Acc ++ solver:map_to_str(Map) ++ "\n" end, "", Maps).
 
-printRow([]) ->
-    io:format("~n");
-printRow([fill|Marks]) ->
-    io:format("#"),
-    printRow(Marks);
-printRow([gap|Marks]) ->
-    io:format("."),
-    printRow(Marks).
+str_to_map(Str) ->
+    lists:map(fun(S) -> solver:str_to_map(S) end, lines(Str)).
+
+lines(Str) -> lines(Str, "").
+
+lines([$\n], LineAcc) -> [lists:reverse(LineAcc)];
+lines([$\n|Str], LineAcc) -> [lists:reverse(LineAcc)|lines(Str, "")];
+lines([Char|Str], LineAcc) -> lines(Str, [Char|LineAcc]).
 
 solve(Rows, Cols) ->
     case check_inputs(Rows, Cols) of
@@ -211,8 +225,8 @@ solve(Rows, Cols) ->
         true ->
             RowSolvers = lists:map(fun({ Id, Fills }) -> solver:start_link(Id, length(Cols), Fills, row, self()) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
             ColSolvers = lists:map(fun({ Id, Fills }) -> solver:start_link(Id, length(Rows), Fills, col, self()) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
-            lists:map(fun(Solver) -> solver:set_solvers(Solver, ColSolvers) end, RowSolvers),
-            lists:map(fun(Solver) -> solver:set_solvers(Solver, RowSolvers) end, ColSolvers),
+            lists:foreach(fun(Solver) -> solver:set_solvers(Solver, ColSolvers) end, RowSolvers),
+            lists:foreach(fun(Solver) -> solver:set_solvers(Solver, RowSolvers) end, ColSolvers),
             case manage(RowSolvers ++ ColSolvers) of
                 stalled -> ambiguous;
                 nonsense -> invalid;
@@ -240,7 +254,7 @@ check_inputs3(Fill, Max) ->
 
 manage(Solvers) ->
     register(solverManager, self()),
-    lists:map(fun(Solver) -> solver:go(Solver) end, Solvers),
+    lists:foreach(fun(Solver) -> solver:go(Solver) end, Solvers),
     Answer = manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
     unregister(solverManager),
     Answer.
@@ -261,7 +275,7 @@ manage(IsGoodResult, SolversState, SolversResult) ->
                     exit("unexpected message", Unexpected)
             end;
         false ->
-            lists:map(fun(Solver) -> solver:terminate(Solver) end, maps:keys(SolversState)),
+            lists:foreach(fun(Solver) -> solver:terminate(Solver) end, maps:keys(SolversState)),
             waitTermination(IsGoodResult, lists:member(stalled, maps:values(SolversState)), SolversState, SolversResult)
     end.
 
