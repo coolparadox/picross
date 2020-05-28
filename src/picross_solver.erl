@@ -1,4 +1,4 @@
--module(solver).
+-module(picross_solver).
 -export([test/0,
          start/5,
          start_link/5,

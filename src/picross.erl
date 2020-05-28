@@ -208,10 +208,10 @@ test() ->
     ok.
 
 map_to_str(Maps) ->
-    lists:foldl(fun(Map, Acc) -> Acc ++ solver:map_to_str(Map) ++ "\n" end, "", Maps).
+    lists:foldl(fun(Map, Acc) -> Acc ++ picross_solver:map_to_str(Map) ++ "\n" end, "", Maps).
 
 str_to_map(Str) ->
-    lists:map(fun(S) -> solver:str_to_map(S) end, lines(Str)).
+    lists:map(fun(S) -> picross_solver:str_to_map(S) end, lines(Str)).
 
 lines(Str) -> lines(Str, "").
 
@@ -223,10 +223,10 @@ solve(Rows, Cols) ->
     case check_inputs(Rows, Cols) of
         false -> badarg;
         true ->
-            RowSolvers = lists:map(fun({ Id, Fills }) -> solver:start_link(Id, length(Cols), Fills, row, self()) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
-            ColSolvers = lists:map(fun({ Id, Fills }) -> solver:start_link(Id, length(Rows), Fills, col, self()) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
-            lists:foreach(fun(Solver) -> solver:set_solvers(Solver, ColSolvers) end, RowSolvers),
-            lists:foreach(fun(Solver) -> solver:set_solvers(Solver, RowSolvers) end, ColSolvers),
+            RowSolvers = lists:map(fun({ Id, Fills }) -> picross_solver:start_link(Id, length(Cols), Fills, row, self()) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
+            ColSolvers = lists:map(fun({ Id, Fills }) -> picross_solver:start_link(Id, length(Rows), Fills, col, self()) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
+            lists:foreach(fun(Solver) -> picross_solver:set_solvers(Solver, ColSolvers) end, RowSolvers),
+            lists:foreach(fun(Solver) -> picross_solver:set_solvers(Solver, RowSolvers) end, ColSolvers),
             case manage(RowSolvers ++ ColSolvers) of
                 stalled -> ambiguous;
                 nonsense -> invalid;
@@ -254,7 +254,7 @@ check_inputs3(Fill, Max) ->
 
 manage(Solvers) ->
     register(solverManager, self()),
-    lists:foreach(fun(Solver) -> solver:go(Solver) end, Solvers),
+    lists:foreach(fun(Solver) -> picross_solver:go(Solver) end, Solvers),
     Answer = manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
     unregister(solverManager),
     Answer.
@@ -275,7 +275,7 @@ manage(IsGoodResult, SolversState, SolversResult) ->
                     exit("unexpected message", Unexpected)
             end;
         false ->
-            lists:foreach(fun(Solver) -> solver:terminate(Solver) end, maps:keys(SolversState)),
+            lists:foreach(fun(Solver) -> picross_solver:terminate(Solver) end, maps:keys(SolversState)),
             waitTermination(IsGoodResult, lists:member(stalled, maps:values(SolversState)), SolversState, SolversResult)
     end.
 
