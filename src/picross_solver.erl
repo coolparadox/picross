@@ -307,7 +307,7 @@ xfill(Sum, Count) when Count > 2 andalso Sum >= Count - 2 ->
 % Example: hfill(5,3) -> [[1,1,3],[1,2,2],[1,3,1],[2,1,2],[2,2,1],[3,1,1]]
 hfill(Sum, 1) -> [[Sum]];
 hfill(Sum, Count) when Count > 1 andalso Sum >= Count ->
-    io:format("~s~n", [element(2, process_info(self(), backtrace))]),
+    % io:format("~s~n", [element(2, process_info(self(), backtrace))]),
     [ [H|T] || H <- lists:seq(1,Sum-(Count-1)), T <- hfill(Sum-H, Count-1) ].
 
 % Blend two lists of equal size, alternating elements
