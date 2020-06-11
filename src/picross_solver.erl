@@ -12,7 +12,7 @@
 
 test() ->
 
-    [fill, gap, unknown] = str_to_map("#.?"),
+    [fill, gap, unknown] = str_to_map("  #.?  "),
     "#.?" = map_to_str([fill, gap, unknown]),
 
     GetNextMessage = fun() ->
@@ -172,12 +172,13 @@ test() ->
 % Module API
 
 str_to_map(Str) ->
-    lists:map(
+    lists:filtermap(
         fun(Char) ->
             case Char of
-                $# -> fill;
-                $. -> gap;
-                $? -> unknown
+                $# -> {true,fill};
+                $. -> {true,gap};
+                $? -> {true,unknown};
+                $  -> false
             end
         end, Str).
 
@@ -270,7 +271,9 @@ stalled(enter, _, S) ->
     tell(S, stalled),
     keep_state_and_data;
 stalled(cast, { hint, _, _ }, S) ->
-    { next_state, discovering, S, postpone }.
+    { next_state, discovering, S, postpone };
+stalled({call, From}, retire, S) ->
+    { next_state, retired, S, { reply, From, S#state.clue } }.
 
 resting(enter, _, S) ->
     tell(S, resting),

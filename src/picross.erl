@@ -223,15 +223,18 @@ solve(Rows, Cols) ->
     case check_inputs(Rows, Cols) of
         false -> badarg;
         true ->
-            RowSolvers = lists:map(fun({ Id, Fills }) -> picross_solver:start_link(Id, length(Cols), Fills, row, self()) end, lists:zip(lists:seq(1, length(Rows)), Rows)),
-            ColSolvers = lists:map(fun({ Id, Fills }) -> picross_solver:start_link(Id, length(Rows), Fills, col, self()) end, lists:zip(lists:seq(1, length(Cols)), Cols)),
-            lists:foreach(fun(Solver) -> picross_solver:set_solvers(Solver, ColSolvers) end, RowSolvers),
-            lists:foreach(fun(Solver) -> picross_solver:set_solvers(Solver, RowSolvers) end, ColSolvers),
-            case manage(RowSolvers ++ ColSolvers) of
+            RowSolvers = lists:map(fun({ Id, Fills }) -> { ok, Pid } = picross_solver:start_link(Id, length(Cols), Fills, self()), Pid end, lists:zip(lists:seq(1, length(Rows)), Rows)),
+            ColSolvers = lists:map(fun({ Id, Fills }) -> { ok, Pid } = picross_solver:start_link(Id, length(Rows), Fills, self()), Pid end, lists:zip(lists:seq(1, length(Cols)), Cols)),
+            lists:foreach(fun(Solver) -> ok = picross_solver:prime(Solver, ColSolvers) end, RowSolvers),
+            lists:foreach(fun(Solver) -> ok = picross_solver:prime(Solver, RowSolvers) end, ColSolvers),
+            AllSolvers = RowSolvers ++ ColSolvers,
+            Answer = case manage(AllSolvers) of
                 stalled -> ambiguous;
                 nonsense -> invalid;
-                { ok, SolversResult } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, SolversResult) end, RowSolvers) }
-            end
+                { ok, Results } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, Results) end, RowSolvers) }
+            end,
+            lists:foreach(fun(Solver) -> ok = picross_solver:stop(Solver) end, AllSolvers),
+            Answer
     end.
 
 check_inputs([], _) -> false;
@@ -253,51 +256,56 @@ check_inputs3(Fill, Max) ->
     andalso lists:all(fun(Val) -> Val > 0 andalso Val =< Max end, Fill).
 
 manage(Solvers) ->
-    register(solverManager, self()),
-    lists:foreach(fun(Solver) -> picross_solver:go(Solver) end, Solvers),
-    Answer = manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), working))), maps:new()),
-    unregister(solverManager),
-    Answer.
+    manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), discovering)))).
 
-manage(IsGoodResult, SolversState, SolversResult) ->
-    case lists:member(working, maps:values(SolversState)) of
+manage(IsGoodResult, States) ->
+    case lists:member(discovering, maps:values(States)) of
         true ->
             receive
-                { Solver, working } ->
-                    manage(IsGoodResult, maps:put(Solver, working, SolversState), SolversResult);
+                { Solver, discovering } ->
+                    manage(IsGoodResult, maps:put(Solver, discovering, States));
                 { Solver, stalled } ->
-                    manage(IsGoodResult, maps:put(Solver, stalled, SolversState), SolversResult);
-                { Solver, done, Result } ->
-                    manage(IsGoodResult, maps:put(Solver, done, SolversState), maps:put(Solver, Result, SolversResult));
+                    manage(IsGoodResult, maps:put(Solver, stalled, States));
+                { Solver, resting } ->
+                    manage(IsGoodResult, maps:put(Solver, resting, States));
                 { _, badhint } ->
-                    manage(false, SolversState, SolversResult);
+                    manage(false, States);
                 Unexpected ->
                     exit("unexpected message", Unexpected)
             end;
         false ->
-            lists:foreach(fun(Solver) -> picross_solver:terminate(Solver) end, maps:keys(SolversState)),
-            waitTermination(IsGoodResult, lists:member(stalled, maps:values(SolversState)), SolversState, SolversResult)
+            case IsGoodResult of
+                false -> nonsense;
+                true -> waitTermination(true, lists:member(stalled, maps:values(States)), States, retireSolvers(maps:keys(States), maps:new()))
+            end
     end.
 
-waitTermination(IsGoodResult, Stalled, SolversState, SolversResult) ->
-    case lists:all(fun(State) -> case State of terminated -> true; _ -> false end end, maps:values(SolversState)) of
+retireSolvers([], Results) -> Results;
+retireSolvers([Solver|Solvers], Results) ->
+    retireSolvers(Solvers, maps:put(Solver, picross_solver:retire(Solver), Results)).
+
+waitTermination(IsGoodResult, IsStalled, States, Results) ->
+    io:format("waitTermination~n"),
+    case lists:all(fun(State) -> case State of retired -> true; _ -> false end end, maps:values(States)) of
         true ->
             case IsGoodResult of
                 false -> nonsense;
                 true ->
-                    case Stalled of
+                    case IsStalled of
                         true -> stalled;
-                        false -> { ok, SolversResult }
+                        false -> { ok, Results }
                     end
             end;
         false ->
             receive
-                { Solver, terminated } ->
-                    waitTermination(IsGoodResult, Stalled, maps:put(Solver, terminated, SolversState), SolversResult);
+                { Solver, retired } ->
+                    io:format("retired~n"),
+                    waitTermination(IsGoodResult, IsStalled, maps:put(Solver, retired, States), Results);
                 { _, badhint } ->
-                    waitTermination(false, Stalled, SolversState, SolversResult);
-                { _, done, _ } ->
-                    waitTermination(IsGoodResult, Stalled, SolversState, SolversResult);
+                    io:format("badhint~n"),
+                    waitTermination(false, IsStalled, States, Results);
+%                { _, resting, _ } ->
+%                    waitTermination(IsGoodResult, IsStalled, States, Results);
                 Unexpected ->
                     exit("unexpected message", Unexpected)
             after 1000 ->
