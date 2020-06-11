@@ -274,10 +274,7 @@ manage(IsGoodResult, States) ->
                     exit("unexpected message", Unexpected)
             end;
         false ->
-            case IsGoodResult of
-                false -> nonsense;
-                true -> waitTermination(true, lists:member(stalled, maps:values(States)), States, retireSolvers(maps:keys(States), maps:new()))
-            end
+            waitTermination(IsGoodResult, lists:member(stalled, maps:values(States)), States, retireSolvers(maps:keys(States), maps:new()))
     end.
 
 retireSolvers([], Results) -> Results;
@@ -285,7 +282,6 @@ retireSolvers([Solver|Solvers], Results) ->
     retireSolvers(Solvers, maps:put(Solver, picross_solver:retire(Solver), Results)).
 
 waitTermination(IsGoodResult, IsStalled, States, Results) ->
-    io:format("waitTermination~n"),
     case lists:all(fun(State) -> case State of retired -> true; _ -> false end end, maps:values(States)) of
         true ->
             case IsGoodResult of
@@ -299,13 +295,9 @@ waitTermination(IsGoodResult, IsStalled, States, Results) ->
         false ->
             receive
                 { Solver, retired } ->
-                    io:format("retired~n"),
                     waitTermination(IsGoodResult, IsStalled, maps:put(Solver, retired, States), Results);
                 { _, badhint } ->
-                    io:format("badhint~n"),
                     waitTermination(false, IsStalled, States, Results);
-%                { _, resting, _ } ->
-%                    waitTermination(IsGoodResult, IsStalled, States, Results);
                 Unexpected ->
                     exit("unexpected message", Unexpected)
             after 1000 ->

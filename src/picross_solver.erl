@@ -240,7 +240,9 @@ priming(cast, {prime, Solvers}, S) ->
             { next_state, discovering, NS };
         false ->
             { next_state, resting, NS }
-    end.
+    end;
+priming({call, From}, retire, S) ->
+    { next_state, retired, S, { reply, From, S#state.clue } }.
 
 discovering(enter, _, S) ->
     tell(S, discovering),
@@ -265,7 +267,9 @@ discovering(cast, { hint, Position, Hint }, S) ->
                 false ->
                     { next_state, resting, NS }
             end
-    end.
+    end;
+discovering({call, From}, retire, S) ->
+    { next_state, retired, S, { reply, From, S#state.clue } }.
 
 stalled(enter, _, S) ->
     tell(S, stalled),
