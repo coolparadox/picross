@@ -2,7 +2,7 @@
 -behaviour(gen_statem).
 -export([test/0]).
 -export([str_to_map/1, map_to_str/1]).
--export([start/4, start_link/4, stop/1, prime/2, retire/1]).
+-export([start/4, start_link/4, stop/1, prime/2, retire/1, get_result/1]).
 -export([callback_mode/0, init/1]).
 -export([priming/3, discovering/3, stalled/3, resting/3, retired/3]).
 -record(state, { id, length, fills, listener, solvers=[], clue=[] }).
@@ -27,19 +27,24 @@ test() ->
     ok = fun() ->
 
         { ok, RowSolver } = start_link(1, 1, [1], self()),
+        { RowSolver, state, priming } = GetNextMessage(),
+
         { ok, ColSolver } = start_link(1, 1, [1], self()),
+        { ColSolver, state, priming } = GetNextMessage(),
 
         % This puzzle is immediately solved; no hint is required.
         ok = prime(RowSolver, [ColSolver]),
-        { RowSolver, resting } = GetNextMessage(),
+        { RowSolver, state, resting } = GetNextMessage(),
         ok = prime(ColSolver, [RowSolver]),
-        { ColSolver, resting } = GetNextMessage(),
+        { ColSolver, state, resting } = GetNextMessage(),
 
         % Check solution.
-        [fill] = retire(RowSolver),
-        { RowSolver, retired } = GetNextMessage(),
-        [fill] = retire(ColSolver),
-        { ColSolver, retired } = GetNextMessage(),
+        ok = retire(RowSolver),
+        { RowSolver, state, retired } = GetNextMessage(),
+        [fill] = get_result(RowSolver),
+        ok = retire(ColSolver),
+        { ColSolver, state, retired } = GetNextMessage(),
+        [fill] = get_result(ColSolver),
 
         % Release resources.
         ok = stop(RowSolver),
@@ -52,20 +57,22 @@ test() ->
     ok = fun() ->
 
         { ok, RowSolver } = start_link(1, 1, [1], self()),
+        { RowSolver, state, priming } = GetNextMessage(),
         { ok, ColSolver } = start_link(1, 1, [1], self()),
+        { ColSolver, state, priming } = GetNextMessage(),
         ok = prime(RowSolver, [ColSolver]),
-        { RowSolver, resting } = GetNextMessage(),
+        { RowSolver, state, resting } = GetNextMessage(),
         ok = prime(ColSolver, [RowSolver]),
-        { ColSolver, resting } = GetNextMessage(),
+        { ColSolver, state, resting } = GetNextMessage(),
 
         % Check for acknowledgement of a bad hint.
         ok = hint(RowSolver, 1, gap),
         { RowSolver, badhint } = GetNextMessage(),
 
-        [fill] = retire(RowSolver),
-        { RowSolver, retired } = GetNextMessage(),
-        [fill] = retire(ColSolver),
-        { ColSolver, retired } = GetNextMessage(),
+        ok = retire(RowSolver),
+        { RowSolver, state, retired } = GetNextMessage(),
+        ok = retire(ColSolver),
+        { ColSolver, state, retired } = GetNextMessage(),
         ok = stop(RowSolver),
         ok = stop(ColSolver),
 
@@ -78,29 +85,37 @@ test() ->
     ok = fun() ->
 
         { ok, RowSolver1 } = start_link(1, 2, [2], self()),
+        { RowSolver1, state, priming } = GetNextMessage(),
         { ok, RowSolver2 } = start_link(2, 2, [1], self()),
+        { RowSolver2, state, priming } = GetNextMessage(),
         { ok, ColSolver1 } = start_link(1, 2, [1], self()),
+        { ColSolver1, state, priming } = GetNextMessage(),
         { ok, ColSolver2 } = start_link(2, 2, [2], self()),
+        { ColSolver2, state, priming } = GetNextMessage(),
 
         ok = prime(RowSolver1, [ColSolver1, ColSolver2]),
-        { RowSolver1, resting } = GetNextMessage(),
+        { RowSolver1, state, resting } = GetNextMessage(),
         ok = prime(RowSolver2, [ColSolver1, ColSolver2]),
-        { RowSolver2, discovering } = GetNextMessage(),
+        { RowSolver2, state, discovering } = GetNextMessage(),
         ok = prime(ColSolver1, [RowSolver1, RowSolver2]),
-        { ColSolver1, discovering } = GetNextMessage(),
-        { ColSolver1, resting } = GetNextMessage(),
-        { RowSolver2, resting } = GetNextMessage(),
+        { ColSolver1, state, discovering } = GetNextMessage(),
+        { ColSolver1, state, resting } = GetNextMessage(),
+        { RowSolver2, state, resting } = GetNextMessage(),
         ok = prime(ColSolver2, [RowSolver1, RowSolver2]),
-        { ColSolver2, resting } = GetNextMessage(),
+        { ColSolver2, state, resting } = GetNextMessage(),
 
-        [fill, fill] = retire(RowSolver1),
-        { RowSolver1, retired } = GetNextMessage(),
-        [gap, fill] = retire(RowSolver2),
-        { RowSolver2, retired } = GetNextMessage(),
-        [fill, gap] = retire(ColSolver1),
-        { ColSolver1, retired } = GetNextMessage(),
-        [fill, fill] = retire(ColSolver2),
-        { ColSolver2, retired } = GetNextMessage(),
+        ok = retire(RowSolver1),
+        { RowSolver1, state, retired } = GetNextMessage(),
+        [fill, fill] = get_result(RowSolver1),
+        ok = retire(RowSolver2),
+        { RowSolver2, state, retired } = GetNextMessage(),
+        [gap, fill] = get_result(RowSolver2),
+        ok = retire(ColSolver1),
+        { ColSolver1, state, retired } = GetNextMessage(),
+        [fill, gap] = get_result(ColSolver1),
+        ok = retire(ColSolver2),
+        { ColSolver2, state, retired } = GetNextMessage(),
+        [fill, fill] = get_result(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -117,45 +132,53 @@ test() ->
     ok = fun() ->
 
         { ok, RowSolver1 } = start_link(1, 2, [1], self()),
+        { RowSolver1, state, priming } = GetNextMessage(),
         { ok, RowSolver2 } = start_link(2, 2, [1], self()),
+        { RowSolver2, state, priming } = GetNextMessage(),
         { ok, ColSolver1 } = start_link(1, 2, [1], self()),
+        { ColSolver1, state, priming } = GetNextMessage(),
         { ok, ColSolver2 } = start_link(2, 2, [1], self()),
+        { ColSolver2, state, priming } = GetNextMessage(),
 
         ok = prime(RowSolver1, [ColSolver1, ColSolver2]),
-        { RowSolver1, discovering } = GetNextMessage(),
+        { RowSolver1, state, discovering } = GetNextMessage(),
         ok = prime(RowSolver2, [ColSolver1, ColSolver2]),
-        { RowSolver2, discovering } = GetNextMessage(),
+        { RowSolver2, state, discovering } = GetNextMessage(),
         ok = prime(ColSolver1, [RowSolver1, RowSolver2]),
-        { ColSolver1, discovering } = GetNextMessage(),
+        { ColSolver1, state, discovering } = GetNextMessage(),
         ok = prime(ColSolver2, [RowSolver1, RowSolver2]),
-        { ColSolver2, discovering } = GetNextMessage(),
+        { ColSolver2, state, discovering } = GetNextMessage(),
 
         % This puzzle leads to a dead end.
-        { RowSolver1, stalled } = GetNextMessage(),
-        { RowSolver2, stalled } = GetNextMessage(),
-        { ColSolver1, stalled } = GetNextMessage(),
-        { ColSolver2, stalled } = GetNextMessage(),
+        { RowSolver1, state, stalled } = GetNextMessage(),
+        { RowSolver2, state, stalled } = GetNextMessage(),
+        { ColSolver1, state, stalled } = GetNextMessage(),
+        { ColSolver2, state, stalled } = GetNextMessage(),
 
         % Let's offer a hint to one of the solvers in order it reaches a solution.
         % This should cascade hints to the remaining solvers leading to a possible solution to the puzzle.
         ok = hint(RowSolver1, 1, fill),
-        { RowSolver1, discovering } = GetNextMessage(),
-        { RowSolver1, resting } = GetNextMessage(),
-        { ColSolver2, discovering } = GetNextMessage(),
-        { ColSolver2, resting } = GetNextMessage(),
-        { RowSolver2, discovering } = GetNextMessage(),
-        { RowSolver2, resting } = GetNextMessage(),
-        { ColSolver1, discovering } = GetNextMessage(),
-        { ColSolver1, resting } = GetNextMessage(),
+        { RowSolver1, state, discovering } = GetNextMessage(),
+        { RowSolver1, state, resting } = GetNextMessage(),
+        { ColSolver2, state, discovering } = GetNextMessage(),
+        { ColSolver2, state, resting } = GetNextMessage(),
+        { RowSolver2, state, discovering } = GetNextMessage(),
+        { RowSolver2, state, resting } = GetNextMessage(),
+        { ColSolver1, state, discovering } = GetNextMessage(),
+        { ColSolver1, state, resting } = GetNextMessage(),
 
-        [fill, gap] = retire(RowSolver1),
-        { RowSolver1, retired } = GetNextMessage(),
-        [gap, fill] = retire(RowSolver2),
-        { RowSolver2, retired } = GetNextMessage(),
-        [fill, gap] = retire(ColSolver1),
-        { ColSolver1, retired } = GetNextMessage(),
-        [gap, fill] = retire(ColSolver2),
-        { ColSolver2, retired } = GetNextMessage(),
+        ok = retire(RowSolver1),
+        { RowSolver1, state, retired } = GetNextMessage(),
+        [fill, gap] = get_result(RowSolver1),
+        ok = retire(RowSolver2),
+        { RowSolver2, state, retired } = GetNextMessage(),
+        [gap, fill] = get_result(RowSolver2),
+        ok = retire(ColSolver1),
+        { ColSolver1, state, retired } = GetNextMessage(),
+        [fill, gap] = get_result(ColSolver1),
+        ok = retire(ColSolver2),
+        { ColSolver2, state, retired } = GetNextMessage(),
+        [gap, fill] = get_result(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -210,6 +233,9 @@ prime(Solver, Solvers) ->
 retire(Solver) ->
     gen_statem:call(Solver, retire).
 
+get_result(Solver) ->
+    gen_statem:call(Solver, get_result).
+
 stop(Solver) ->
     gen_statem:stop(Solver).
 
@@ -227,7 +253,8 @@ init(S) ->
 
 % State functions
 
-priming(enter, _, _) ->
+priming(enter, _, S) ->
+    tell(S, priming),
     keep_state_and_data;
 priming(cast, { hint, _, _ }, _) ->
     { keep_state_and_data, postpone };
@@ -242,7 +269,7 @@ priming(cast, {prime, Solvers}, S) ->
             { next_state, resting, NS }
     end;
 priming({call, From}, retire, S) ->
-    { next_state, retired, S, { reply, From, S#state.clue } }.
+    { next_state, retired, S, { reply, From, ok } }.
 
 discovering(enter, _, S) ->
     tell(S, discovering),
@@ -253,7 +280,7 @@ discovering(cast, { hint, Position, Hint }, S) ->
     { HintCategory, HintedClue } = acknowledge_hint(S#state.clue, Position, Hint),
     case HintCategory of
         nonsense ->
-            tell(S, badhint),
+            badhint(S),
             keep_state_and_data;
         known ->
             keep_state_and_data;
@@ -269,7 +296,7 @@ discovering(cast, { hint, Position, Hint }, S) ->
             end
     end;
 discovering({call, From}, retire, S) ->
-    { next_state, retired, S, { reply, From, S#state.clue } }.
+    { next_state, retired, S, { reply, From, ok } }.
 
 stalled(enter, _, S) ->
     tell(S, stalled),
@@ -277,7 +304,7 @@ stalled(enter, _, S) ->
 stalled(cast, { hint, _, _ }, S) ->
     { next_state, discovering, S, postpone };
 stalled({call, From}, retire, S) ->
-    { next_state, retired, S, { reply, From, S#state.clue } }.
+    { next_state, retired, S, { reply, From, ok } }.
 
 resting(enter, _, S) ->
     tell(S, resting),
@@ -285,16 +312,18 @@ resting(enter, _, S) ->
 resting(cast, { hint, Position, Hint }, S) ->
     { HintCategory, _ } = acknowledge_hint(S#state.clue, Position, Hint),
     case HintCategory of
-        nonsense -> tell(S, badhint);
+        nonsense -> badhint(S);
         _ -> ok
     end,
     keep_state_and_data;
 resting({call, From}, retire, S) ->
-    { next_state, retired, S, { reply, From, S#state.clue } }.
+    { next_state, retired, S, { reply, From, ok } }.
 
 retired(enter, _, S) ->
     tell(S, retired),
-    keep_state_and_data.
+    keep_state_and_data;
+retired({call, From}, get_result, S) ->
+    { keep_state_and_data, { reply, From, S#state.clue } }.
 
 
 % Support functions
@@ -303,7 +332,10 @@ hint(Solver, Position, Hint) ->
     gen_statem:cast(Solver, { hint, Position, Hint }).
 
 tell(S, Atom) ->
-    S#state.listener ! { self(), Atom }.
+    S#state.listener ! { self(), state, Atom }.
+
+badhint(S) ->
+    S#state.listener ! { self(), badhint }.
 
 check_inputs([], _) -> false;
 check_inputs(Fills, Max) ->
