@@ -2,7 +2,7 @@
 -behaviour(gen_statem).
 -export([test/0]).
 -export([str_to_map/1, map_to_str/1]).
--export([start/4, start_link/4, stop/1, prime/2, retire/1, get_solution/1]).
+-export([start/4, start_link/4, stop/1, prime/2, retire/1, get_map/1]).
 -export([callback_mode/0, init/1]).
 -export([priming/3, discovering/3, stalled/3, resting/3, retired/3]).
 -record(state, { id, length, fills, listener, solvers=[], clue=[] }).
@@ -42,10 +42,10 @@ test() ->
         % Check solution.
         ok = retire(RowSolver),
         { RowSolver, state, retired } = GetNextMessage(),
-        [fill] = get_solution(RowSolver),
+        [fill] = get_map(RowSolver),
         ok = retire(ColSolver),
         { ColSolver, state, retired } = GetNextMessage(),
-        [fill] = get_solution(ColSolver),
+        [fill] = get_map(ColSolver),
 
         % Release resources.
         ok = stop(RowSolver),
@@ -107,16 +107,16 @@ test() ->
 
         ok = retire(RowSolver1),
         { RowSolver1, state, retired } = GetNextMessage(),
-        [fill, fill] = get_solution(RowSolver1),
+        [fill, fill] = get_map(RowSolver1),
         ok = retire(RowSolver2),
         { RowSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_solution(RowSolver2),
+        [gap, fill] = get_map(RowSolver2),
         ok = retire(ColSolver1),
         { ColSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_solution(ColSolver1),
+        [fill, gap] = get_map(ColSolver1),
         ok = retire(ColSolver2),
         { ColSolver2, state, retired } = GetNextMessage(),
-        [fill, fill] = get_solution(ColSolver2),
+        [fill, fill] = get_map(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -127,7 +127,7 @@ test() ->
 
     end(),
 
-    % Feed an ambiguous puzzle:
+    % Try to solve an ambiguous puzzle:
     % .# | #.
     % #. | .#
     ok = fun() ->
@@ -157,7 +157,7 @@ test() ->
         { ColSolver2, state, stalled } = GetNextMessage(),
 
         % Let's offer a hint to one of the solvers in order it reaches a solution.
-        % This should cascade hints to the remaining solvers leading to a possible solution to the puzzle.
+        % This should cascade hints among the remaining solvers leading to a possible solution to the puzzle.
         ok = hint(RowSolver1, 1, fill),
         { RowSolver1, state, discovering } = GetNextMessage(),
         { RowSolver1, state, resting } = GetNextMessage(),
@@ -170,16 +170,16 @@ test() ->
 
         ok = retire(RowSolver1),
         { RowSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_solution(RowSolver1),
+        [fill, gap] = get_map(RowSolver1),
         ok = retire(RowSolver2),
         { RowSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_solution(RowSolver2),
+        [gap, fill] = get_map(RowSolver2),
         ok = retire(ColSolver1),
         { ColSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_solution(ColSolver1),
+        [fill, gap] = get_map(ColSolver1),
         ok = retire(ColSolver2),
         { ColSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_solution(ColSolver2),
+        [gap, fill] = get_map(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -234,8 +234,8 @@ prime(Solver, Solvers) ->
 retire(Solver) ->
     gen_statem:call(Solver, retire).
 
-get_solution(Solver) ->
-    gen_statem:call(Solver, get_solution).
+get_map(Solver) ->
+    gen_statem:call(Solver, get_map).
 
 stop(Solver) ->
     gen_statem:stop(Solver).
@@ -323,7 +323,7 @@ resting({call, From}, retire, S) ->
 retired(enter, _, S) ->
     tell(S, retired),
     keep_state_and_data;
-retired({call, From}, get_solution, S) ->
+retired({call, From}, get_map, S) ->
     { keep_state_and_data, { reply, From, S#state.clue } }.
 
 

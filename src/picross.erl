@@ -208,99 +208,21 @@ test() ->
     ok.
 
 map_to_str(Maps) ->
-    lists:foldl(fun(Map, Acc) -> Acc ++ picross_solver:map_to_str(Map) ++ "\n" end, "", Maps).
+    picross_solver_orchestrator:map_to_str(Maps).
 
 str_to_map(Str) ->
-    lists:map(fun(S) -> picross_solver:str_to_map(S) end, lines(Str)).
+    picross_solver_orchestrator:str_to_map(Str).
 
-lines(Str) -> lines(Str, "").
-
-lines([$\n], LineAcc) -> [lists:reverse(LineAcc)];
-lines([$\n|Str], LineAcc) -> [lists:reverse(LineAcc)|lines(Str, "")];
-lines([Char|Str], LineAcc) -> lines(Str, [Char|LineAcc]).
-
-solve(Rows, Cols) ->
-    case check_inputs(Rows, Cols) of
-        false -> badarg;
-        true ->
-            RowSolvers = lists:map(fun({ Id, Fills }) -> { ok, Pid } = picross_solver:start_link(Id, length(Cols), Fills, self()), Pid end, lists:zip(lists:seq(1, length(Rows)), Rows)),
-            ColSolvers = lists:map(fun({ Id, Fills }) -> { ok, Pid } = picross_solver:start_link(Id, length(Rows), Fills, self()), Pid end, lists:zip(lists:seq(1, length(Cols)), Cols)),
-            lists:foreach(fun(Solver) -> ok = picross_solver:prime(Solver, ColSolvers) end, RowSolvers),
-            lists:foreach(fun(Solver) -> ok = picross_solver:prime(Solver, RowSolvers) end, ColSolvers),
-            AllSolvers = RowSolvers ++ ColSolvers,
-            Answer = case manage(AllSolvers) of
+solve(RowsFills, ColsFills) ->
+    case picross_solver_orchestrator:start_link(self(), RowsFills, ColsFills) of
+        {ok, Orchestrator} ->
+            Answer = receive
+                solved -> {ok, picross_solver_orchestrator:get_map(Orchestrator)};
                 stalled -> ambiguous;
                 nonsense -> invalid;
-                { ok, Results } -> { ok, lists:map(fun(Solver) -> maps:get(Solver, Results) end, RowSolvers) }
+                Unexpected -> exit(unexpected, Unexpected)
             end,
-            lists:foreach(fun(Solver) -> ok = picross_solver:stop(Solver) end, AllSolvers),
-            Answer
-    end.
-
-check_inputs([], _) -> false;
-check_inputs(_, []) -> false;
-check_inputs(Rows, Cols) ->
-    is_list(Rows)
-    andalso is_list(Cols)
-    andalso check_inputs2(Rows, length(Cols))
-    andalso check_inputs2(Cols, length(Rows)).
-
-check_inputs2([], _) -> false;
-check_inputs2(Fills, Max) ->
-    is_list(Fills)
-    andalso lists:all(fun(Fill) -> check_inputs3(Fill, Max) end, Fills).
-
-check_inputs3([], _) -> false;
-check_inputs3(Fill, Max) ->
-    is_list(Fill)
-    andalso lists:all(fun(Val) -> Val > 0 andalso Val =< Max end, Fill).
-
-manage(Solvers) ->
-    manage(true, maps:from_list(lists:zip(Solvers, lists:duplicate(length(Solvers), discovering)))).
-
-manage(IsGoodResult, States) ->
-    case lists:member(discovering, maps:values(States)) of
-        true ->
-            receive
-                { Solver, discovering } ->
-                    manage(IsGoodResult, maps:put(Solver, discovering, States));
-                { Solver, stalled } ->
-                    manage(IsGoodResult, maps:put(Solver, stalled, States));
-                { Solver, resting } ->
-                    manage(IsGoodResult, maps:put(Solver, resting, States));
-                { _, badhint } ->
-                    manage(false, States);
-                Unexpected ->
-                    exit("unexpected message", Unexpected)
-            end;
-        false ->
-            waitTermination(IsGoodResult, lists:member(stalled, maps:values(States)), States, retireSolvers(maps:keys(States), maps:new()))
-    end.
-
-retireSolvers([], Results) -> Results;
-retireSolvers([Solver|Solvers], Results) ->
-    retireSolvers(Solvers, maps:put(Solver, picross_solver:retire(Solver), Results)).
-
-waitTermination(IsGoodResult, IsStalled, States, Results) ->
-    case lists:all(fun(State) -> case State of retired -> true; _ -> false end end, maps:values(States)) of
-        true ->
-            case IsGoodResult of
-                false -> nonsense;
-                true ->
-                    case IsStalled of
-                        true -> stalled;
-                        false -> { ok, Results }
-                    end
-            end;
-        false ->
-            receive
-                { Solver, retired } ->
-                    waitTermination(IsGoodResult, IsStalled, maps:put(Solver, retired, States), Results);
-                { _, badhint } ->
-                    waitTermination(false, IsStalled, States, Results);
-                Unexpected ->
-                    exit("unexpected message", Unexpected)
-            after 1000 ->
-                      exit("termination timeout")
-            end
+            picross_solver_orchestrator:stop(Orchestrator),
+            Answer;
+        badarg -> badarg
     end.
