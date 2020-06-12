@@ -2,7 +2,7 @@
 -behaviour(gen_statem).
 -export([test/0]).
 -export([str_to_map/1, map_to_str/1]).
--export([start/4, start_link/4, stop/1, prime/2, retire/1, get_result/1]).
+-export([start/4, start_link/4, stop/1, prime/2, retire/1, get_solution/1]).
 -export([callback_mode/0, init/1]).
 -export([priming/3, discovering/3, stalled/3, resting/3, retired/3]).
 -record(state, { id, length, fills, listener, solvers=[], clue=[] }).
@@ -17,7 +17,8 @@ test() ->
 
     GetNextMessage = fun() ->
         receive
-            Message -> Message
+            {notify, Message} -> Message;
+            Unexpected -> exit(unexpected, Unexpected)
         after 2 * ?StallTimeout ->
                   error(timeout)
         end
@@ -41,10 +42,10 @@ test() ->
         % Check solution.
         ok = retire(RowSolver),
         { RowSolver, state, retired } = GetNextMessage(),
-        [fill] = get_result(RowSolver),
+        [fill] = get_solution(RowSolver),
         ok = retire(ColSolver),
         { ColSolver, state, retired } = GetNextMessage(),
-        [fill] = get_result(ColSolver),
+        [fill] = get_solution(ColSolver),
 
         % Release resources.
         ok = stop(RowSolver),
@@ -106,16 +107,16 @@ test() ->
 
         ok = retire(RowSolver1),
         { RowSolver1, state, retired } = GetNextMessage(),
-        [fill, fill] = get_result(RowSolver1),
+        [fill, fill] = get_solution(RowSolver1),
         ok = retire(RowSolver2),
         { RowSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_result(RowSolver2),
+        [gap, fill] = get_solution(RowSolver2),
         ok = retire(ColSolver1),
         { ColSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_result(ColSolver1),
+        [fill, gap] = get_solution(ColSolver1),
         ok = retire(ColSolver2),
         { ColSolver2, state, retired } = GetNextMessage(),
-        [fill, fill] = get_result(ColSolver2),
+        [fill, fill] = get_solution(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -169,16 +170,16 @@ test() ->
 
         ok = retire(RowSolver1),
         { RowSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_result(RowSolver1),
+        [fill, gap] = get_solution(RowSolver1),
         ok = retire(RowSolver2),
         { RowSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_result(RowSolver2),
+        [gap, fill] = get_solution(RowSolver2),
         ok = retire(ColSolver1),
         { ColSolver1, state, retired } = GetNextMessage(),
-        [fill, gap] = get_result(ColSolver1),
+        [fill, gap] = get_solution(ColSolver1),
         ok = retire(ColSolver2),
         { ColSolver2, state, retired } = GetNextMessage(),
-        [gap, fill] = get_result(ColSolver2),
+        [gap, fill] = get_solution(ColSolver2),
 
         ok = stop(RowSolver1),
         ok = stop(RowSolver2),
@@ -233,8 +234,8 @@ prime(Solver, Solvers) ->
 retire(Solver) ->
     gen_statem:call(Solver, retire).
 
-get_result(Solver) ->
-    gen_statem:call(Solver, get_result).
+get_solution(Solver) ->
+    gen_statem:call(Solver, get_solution).
 
 stop(Solver) ->
     gen_statem:stop(Solver).
@@ -322,7 +323,7 @@ resting({call, From}, retire, S) ->
 retired(enter, _, S) ->
     tell(S, retired),
     keep_state_and_data;
-retired({call, From}, get_result, S) ->
+retired({call, From}, get_solution, S) ->
     { keep_state_and_data, { reply, From, S#state.clue } }.
 
 
@@ -332,10 +333,10 @@ hint(Solver, Position, Hint) ->
     gen_statem:cast(Solver, { hint, Position, Hint }).
 
 tell(S, Atom) ->
-    S#state.listener ! { self(), state, Atom }.
+    gen_event:notify(S#state.listener, { self(), state, Atom }).
 
 badhint(S) ->
-    S#state.listener ! { self(), badhint }.
+    gen_event:notify(S#state.listener, { self(), badhint }).
 
 check_inputs([], _) -> false;
 check_inputs(Fills, Max) ->
