@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/coolparadox/picross-erl.svg?branch=master)](https://travis-ci.com/coolparadox/picross-erl)
+
 # picross-erl
 
 *Experimentation on the actor model for solving picross / nonogram puzzles*

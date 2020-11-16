@@ -17,8 +17,7 @@ test() ->
 
     GetNextMessage = fun() ->
         receive
-            {notify, Message} -> Message;
-            Unexpected -> exit(unexpected, Unexpected)
+            {notify, Message} -> Message
         after 2 * ?StallTimeout ->
                   error(timeout)
         end

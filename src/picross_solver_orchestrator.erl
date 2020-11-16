@@ -12,7 +12,9 @@ test() ->
 
     GetNextMessage = fun() ->
         receive
-            Message -> Message
+            solved -> solved;
+            stalled -> stalled;
+            nonsense -> nonsense
         end
     end,
 

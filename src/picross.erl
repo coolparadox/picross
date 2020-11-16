@@ -219,8 +219,7 @@ solve(RowsFills, ColsFills) ->
             Answer = receive
                 solved -> {ok, picross_solver_orchestrator:get_map(Orchestrator)};
                 stalled -> ambiguous;
-                nonsense -> invalid;
-                Unexpected -> exit(unexpected, Unexpected)
+                nonsense -> invalid
             end,
             picross_solver_orchestrator:stop(Orchestrator),
             Answer;
