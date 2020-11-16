@@ -82,8 +82,8 @@ In a more eye pleasant representation:
     ##....
     ##....
     ##....
-    ok
+    ok 
 
 ## Known issues
 
-The brute force approach that solvers employ for discovering positions is memory intensive and does not scale for larger puzzles.
+Each solver employs a brute-force approach for solving its positions with the initial numerical clue and the set of received hints as inputs. This implementation is highly memory intensive and does not scale to larger puzzles.
