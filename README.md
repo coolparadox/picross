@@ -18,7 +18,7 @@ On starting, the actors (called **solvers** from now on) take the numeric clues 
 
 ## Solver state machine
 
-As you've guessed, the aforementioned process of solving a picross puzzle is highly asynchronous and can lead to an increasing storm of messages between the solvers if some edge cases are not properly countered.
+As you may have guessed, the aforementioned process of solving a picross puzzle is highly asynchronous and can lead to an increasing storm of messages between the solvers if some edge cases are not properly countered.
 
 A solver can be in one of the following states:
 
