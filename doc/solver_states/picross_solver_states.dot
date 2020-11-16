@@ -1,0 +1,35 @@
+digraph {
+
+    rankdir="LR";
+
+    edge[fontname="italic",fontsize="11pt"];
+
+    start[shape=point,label=""];
+    priming[label="PRIMING"];
+    discovering[label="DISCOVERING"];
+    stalled[label="STALLED"];
+    resting[label="RESTING"];
+    retired[label="RETIRED"];
+
+    start -> priming;
+
+    priming -> priming[label="hint / (postpone)"];
+    priming -> discovering[label="prime(Solvers) [not fully solved] / hint Solvers"];
+    priming -> resting[label="prime(Solvers) [fully solved] / hint Solvers"];
+    priming -> retired[label="retire"]
+
+    discovering -> stalled[label="timeout"];
+    discovering -> discovering[label="hint [nonsense] / issue bad_hint"];
+    discovering -> discovering[label="hint [useful, not fully solved] / hint Solvers"];
+    discovering -> resting[label="hint [useful, fully solved] / hint Solvers"];
+    discovering -> retired[label="retire"];
+
+    stalled -> discovering[label="hint / (postpone)"];
+    stalled -> retired[label="retire"];
+
+    resting -> resting[label="hint [nonsense] / issue bad_hint"]
+    resting -> retired[label="retire"];
+
+    retired -> retired[label="get_map / answer solution"];
+
+}
