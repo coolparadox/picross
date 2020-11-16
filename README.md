@@ -22,7 +22,7 @@ As you've guessed, the aforementioned process of solving a picross puzzle is hig
 
 A solver can be in one of the following states:
 
-- *PRIMING*: Awaiting to be informed who are the crossing solvers that are interested in new discoveries.
+- *PRIMING*: Awaiting to be informed who are the crossing solvers that are interested in new discoveries. In this state, eventual hints received from other solvers are postponed.
 - *DISCOVERING*: Not yet fully solved; awaiting hints from other solvers in the hope this helps advance with the solution.
 - *STALLED*: Not yet fully solved, but too much time has passed without hints. If all solvers reach this state, the puzzle has no unique solution.
 - *RESTING*: The solver is fully solved, but still checking if eventual hints from other solvers are consistent. Any inconsistent hint (e.g. a filled position is hinted to be empty) is a confirmation that the puzzle has no solution.
@@ -43,12 +43,12 @@ This is not yet deployed as a final aplication. The Erlang shell can be used to 
     Eshell V11.1.1  (abort with ^G)
     1>
 
-Modules compilation:
+Compile modules:
 
     1> {ok,_} = c(picross_solver_orchestrator), {ok,_} = c(picross_solver), {ok,_} = c(picross).
     {ok,picross}
 
-Run unit tests:
+Run tests:
 
     2> picross:test().
     ok
