@@ -14,7 +14,7 @@ This project is a hobbyist stake at appling the [actor model](https://www.brians
 
 Each row of the puzzle is an actor whose objective is to solve all of its positions (ie, discover if they're filled or empty -- or black or white if you prefer). Same goes for each column of the puzzle -- so the total number of actors is the sum of rows and columns.
 
-On starting, the actors (called **solvers** from now on) take the numeric clue associated to the solver's row (or column) and try to solve its positions -- the current implementation employs a brute force approach that does not scale well. The amount of solved positions for each actor can be anything from zero to all positions. When a row solver solves a position, it notifies the crossing column solver about the finding, and vice-versa. When a solver receives a consistent hint from another solver, it repeats the cycle of discovering of new positions.
+On starting, the actors (called **solvers** from now on) take the numeric clues associated to each row (or column) and try to solve their positions. The amount of solved positions for each actor can be anything from zero to all positions. When a row solver solves a position, it notifies the crossing column solver about the finding, and vice-versa. When a solver receives a consistent hint from another solver, it repeats the cycle of discovering of new positions.
 
 ## Solver state machine
 
