@@ -24,7 +24,7 @@ A solver can be in one of the following states:
 
 - *PRIMING*: Awaiting to be informed who are the crossing solvers that are interested in new discoveries. In this state, the processing of eventual hints received from other solvers is postponed.
 - *DISCOVERING*: Not yet fully solved; awaiting hints from other solvers in the hope this helps advance with the solution.
-- *STALLED*: Not yet fully solved, but too much time has passed without hints. If all solvers reach this state, the puzzle has no unique solution.
+- *STALLED*: Not yet fully solved, but too much time has passed without hints. If any solver reaches this state permanently, the puzzle has no unique solution.
 - *RESTING*: The solver is fully solved, but still checking if eventual hints from other solvers are consistent. Any inconsistent hint (e.g. a filled position is hinted to be empty) is a confirmation that the puzzle has no solution.
 - *RETIRED*: Stop all solving. The solution of the puzzle, if any, can be safely retrieved when all solvers reach this state.
 
